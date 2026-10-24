@@ -23,8 +23,34 @@ sealed class MonsterCatalog(string folder = "data")
 
     private readonly Lazy<(List<Variety> Rows, string? Error)> _rows = new(() => Load(folder));
     private readonly Lazy<LifeTables?> _life = new(() => LifeTables.Load(folder));
+    private readonly Lazy<Dictionary<string, int[]>> _takeHit = new(() => LoadTakeHit(folder));
 
     public string? Error => _rows.Value.Error;
+
+    /// <summary>
+    /// The indexes of the variety's TakeHit clips in its rig's animation list (data/monster-takehit.json, written by
+    /// <c>python -I scripts/re/monster_takehit.py</c>): S→C 0x1b2 kind 0 plays one of them on the Animated component and
+    /// the clip's own SoundEvents play with it. Most varieties map one clip; a few map a pool (the .act's
+    /// "flinch_small:max_duration=…, flinch_large:min_duration=…" or "flinch_01, flinch_02, flinch_03"), from which the
+    /// server picks one per hit. Empty without the file or the row (the monster then just does not flinch).
+    /// </summary>
+    public IReadOnlyList<int> TakeHit(string id) => _takeHit.Value.GetValueOrDefault(id) ?? [];
+
+    static Dictionary<string, int[]> LoadTakeHit(string folder)
+    {
+        string path = Path.Combine(folder, "monster-takehit.json");
+        if (!File.Exists(path)) return [];
+        using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
+        var result = new Dictionary<string, int[]>();
+        foreach (var p in doc.RootElement.EnumerateObject())
+        {
+            if (p.Value.TryGetProperty("indexes", out var list) && list.ValueKind == JsonValueKind.Array)
+                result[p.Name] = [.. list.EnumerateArray().Where(i => i.ValueKind == JsonValueKind.Number).Select(i => i.GetInt32())];
+            else if (p.Value.TryGetProperty("index", out var one) && one.ValueKind == JsonValueKind.Number)
+                result[p.Name] = [one.GetInt32()];
+        }
+        return result;
+    }
 
     /// <summary>
     /// The maximum life the client gives a monster of this variety at this level, before mods: the client's Monster type

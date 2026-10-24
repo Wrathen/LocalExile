@@ -78,7 +78,82 @@ def read_text(path):
     b = open(f, "rb").read()
     if b[:2] in (b"\xff\xfe", b"\xfe\xff"):
         return b.decode("utf-16")
+    # .amd files, and some .ao/.act files, are UTF-16LE without a byte order mark: ASCII text leaves every other byte 0.
+    if len(b) > 3 and b[1] == 0 and b[3] == 0:
+        return b.decode("utf-16-le")
     return b.decode("utf-8", "replace")
+
+
+AC = re.compile(r'AnimationController\s*\{[^}]*?metadata\s*=\s*"([^"]+)"', re.S)
+
+
+def animation_controller(text):
+    """The AnimationController metadata an .ot text sets, or None (an empty AnimationController block does not count)."""
+    m = AC.search(text or "")
+    return m.group(1) if m else None
+
+
+def extends_of(text):
+    """Every metadata this .ot file extends, in file order; "nothing" marks the root and is dropped."""
+    names = []
+    for m in re.finditer(r'^\s*extends\s+(.+)$', text or "", re.M):
+        for n in re.findall(r'"([^"]+)"', m.group(1)):
+            if n != "nothing" and n not in names:
+                names.append(n)
+    return names
+
+
+def amd_of(ao, fetch_missing=True):
+    """The AnimationController metadata (.amd) of an .ao: the first of its whole extends chain that sets one."""
+    seen, todo = set(), [ao]
+    while todo:
+        path = todo.pop(0)
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        if fetch_missing:
+            fetch([path])
+        text = read_text(path)
+        if text is None:
+            continue
+        if (amd := animation_controller(text)) is not None:
+            return amd
+        todo.extend(p if p.endswith(".ao") else p + ".ao" for p in extends_of(text))
+    return None
+
+
+def amd_map(aos, fetch_missing=True):
+    """{ao: amd} for these .ao files, from one walk over the cached extends chains (see fetch_ao_chain)."""
+    return {ao: amd_of(ao, fetch_missing) for ao in aos}
+
+
+def amd_animations(amd, fetch_missing=True):
+    """The .amd's animations in file order (the client's animation list): name, once/loop, length ms, events.
+
+    Format: a version line, a count line, then per animation "<name>" / once|loop / <length ms> / <event count> /
+    per event "<event>" / <time ms> / "<x> <y> <z>", then two lines. None when the file is missing.
+    """
+    if fetch_missing:
+        fetch([amd])
+    text = read_text(amd)
+    if text is None:
+        return None
+    lines = [l.strip() for l in text.replace("\r", "").split("\n")]
+    out, i = [], 0
+    while i < len(lines):
+        m = re.fullmatch(r'"([^"]+)"', lines[i])
+        if m and i + 3 < len(lines) and lines[i + 1] in ("once", "loop") and lines[i + 2].isdigit() and lines[i + 3].isdigit():
+            events, j = [], i + 4
+            for _ in range(int(lines[i + 3])):
+                if j + 2 >= len(lines):
+                    break
+                events.append((lines[j].strip('"'), lines[j + 1], lines[j + 2]))
+                j += 3
+            out.append({"name": m.group(1), "once": lines[i + 1] == "once", "length": int(lines[i + 2]), "events": events})
+            i = j
+        else:
+            i += 1
+    return out
 
 
 TOKEN = re.compile(r'"[^"]*"|\'[^\']*\'|[{}=]|[^\s{}=]+')

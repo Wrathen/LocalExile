@@ -114,6 +114,14 @@ public class InstanceEntitiesTests
     }
 
     [Fact]
+    public void Animation_update_layout()
+    {
+        // header, u8 kind (0 = play), u32 animation index, u32 float bits (speed 1.0).
+        Assert.Equal("01B2" + "00003000" + "00000000" + "0000" + "00" + "00000005" + "3F800000",
+            Convert.ToHexString(InstanceProtocol.AnimationUpdate(0x3000, 0, 5, 1f)));
+    }
+
+    [Fact]
     public void Action_started_on_an_object_carries_its_id_after_the_flags()
     {
         string hex = Convert.ToHexString(InstanceProtocol.ActionStarted(0x1000, 1, 2, 3, 4, 0x4000, 7, 0x0408, targetObjectId: 0x3000));

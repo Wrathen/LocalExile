@@ -6,56 +6,23 @@
 # a spell is released (Witch spell_projectile_wand: 1066 ms long, contact at 599). The Gateway reads the output to
 # release projectiles at the right moment of the cast (Agents/docs/protocol/11-skills.md §9).
 #
-# .amd text (UTF-16): a version line, a count line, then per animation:
+# .amd text (UTF-16 without a BOM): a version line, a count line, then per animation:
 #   "<name>" / once|loop / <length ms> / <event count> / per event: "<event>" / <time ms> / <x y z>, then two lines.
+# The reader is ot_components.amd_animations (shared with monster_takehit.py).
 # Files come from the GGPK through scripts/re/ggdump (see ot_components.py) and are cached in Tools/re/out/ot.
-import json, os, re, sys
+import json, os, sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ot_components import REPO, cache_name, fetch, read_text  # noqa: E402
-
-
-def amd_of(ao):
-    """The AnimationController metadata of an .ao, following its extends chain."""
-    seen = set()
-    while ao and ao not in seen:
-        seen.add(ao)
-        fetch([ao])
-        text = read_text(ao)
-        if text is None:
-            return None
-        m = re.search(r'AnimationController\s*\{[^}]*?metadata\s*=\s*"([^"]+)"', text, re.S)
-        if m:
-            return m.group(1)
-        m = re.search(r'extends\s+"([^"]+)"', text)
-        ao = m.group(1) + ".ao" if m and not m.group(1).endswith(".ao") else (m.group(1) if m else None)
-    return None
+from ot_components import REPO, amd_animations, amd_of  # noqa: E402
 
 
 def contacts(amd):
-    fetch([amd])
-    if not os.path.exists(cache_name(amd)):
-        return {}
-    raw = open(cache_name(amd), "rb").read()
-    # .amd files are UTF-16 without a byte order mark
-    text = raw.decode("utf-16-le") if len(raw) > 1 and raw[1] == 0 else read_text(amd)
-    lines = [l.strip() for l in text.replace("\r", "").split("\n")]
-    out, i = {}, 0
-    while i < len(lines):
-        m = re.fullmatch(r'"([^"]+)"', lines[i])
-        if m and i + 3 < len(lines) and lines[i + 1] in ("once", "loop") and lines[i + 2].isdigit() and lines[i + 3].isdigit():
-            name, length, events, j = m.group(1), int(lines[i + 2]), int(lines[i + 3]), i + 4
-            contact = None
-            for _ in range(events):
-                ev = lines[j].strip('"')
-                if ev == "contact" and contact is None and lines[j + 1].lstrip("-").isdigit():
-                    contact = int(lines[j + 1])
-                j += 3
-            if contact is not None:
-                out[name] = [length, contact]
-            i = j
-        else:
-            i += 1
+    """{animation: [length ms, contact ms]} for the .amd's animations that have a contact event."""
+    out = {}
+    for a in amd_animations(amd) or []:
+        contact = next((int(t) for ev, t, _ in a["events"] if ev == "contact" and t.lstrip("-").isdigit()), None)
+        if contact is not None:
+            out[a["name"]] = [a["length"], contact]
     return out
 
 

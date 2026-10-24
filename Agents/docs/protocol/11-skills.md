@@ -344,6 +344,25 @@ Live 2026-10-18 with the Witch's Fireball. Code: `SkillCatalog.EffectStats`, `Ge
   handler `0x142195880`): the client runs the skill's action without animation and consumes a use of the skill
   (actor vtable +0x198), which starts the skill bar's cooldown. Without it the tooltip showed the cooldown but the bar
   never ran it: the cooldown records had no entries (Frida, live 2026-10-21; not yet checked with 0x1ce).
+- **Hit reaction (live 2026-10-25).** A monster that takes a hit plays its rig's **TakeHit** clip with S→C **0x1b2**
+  (`InstanceProtocol.AnimationUpdate`, kind 0): object header, u8 kind, u32 clip index (+0x24), u32 float bits (speed,
+  +0x28). The index is 0-based into the actor's animation list, which is the rig `.amd`'s animations in file order
+  (Sanctum zombie: `flinch_unarmed` = 156 of 249 in `Art/Models/MONSTERS/skeleton/rig.amd`; `flinch_pitchfork` = 151,
+  both played the flinch *with its SoundEvent* live). The handler (`0x141e58ef0`) calls `0x141dba530`, which ignores an
+  index past the actor's animation count — a wrong index costs nothing. `0x1b1` alone only stores the pool and runs the
+  death/revive slots, so a hit without 0x1b2 is silent and still. A killing blow gets no flinch (the client's death
+  runs instead). The reaction is gated like a stun: the hit must take at least a tenth of the monster's max life, and a
+  monster flinches at most every 0.4 s — otherwise a fast attack or a volley restarts the clip and its sound and keeps
+  cutting the monster's own attack and walk animations while the server still moves it.
+  `data/monster-takehit.json` (`python -I scripts/re/monster_takehit.py`) holds each MonsterVarieties
+  row's index(es): its `.act` maps `TakeHit` to a clip, and the `.ao`'s `AnimationController` names the rig. 26 `.act`
+  files map a pool — `flinch_01, flinch_02, flinch_03`, or `flinch_small:max_duration=0.45, flinch_large:min_duration=0.45`
+  (the condition picks by the hit's stun duration, which the server does not model) — and the server picks one at random
+  per hit; every other variety has a single clip. An `@Name` alias is expanded to the whole list it names, and every
+  `extends` parent is followed (not just the first), with "nothing" ending the chain. The client also has the directional
+  types TakeHitForward/Backward/Left/Right, but the `.act` files that set them alias them all to `@TakeHit`, so they add
+  no variants. 0x262 (a Life "changed by" event with a signed delta) reaches the Life listeners but plays no flinch,
+  sound or blood.
 - **Release.** A spell leaves at its cast animation's **contact** keyframe, which the client plays stretched to the cast
   time: the Witch's `spell_projectile_wand` in `Art/Models/CHARACTERS/Witch/rig.amd` is 1066 ms long with `contact` at
   599 ms, so Fireball leaves after 56% of the cast. `python -I scripts/re/anim_contacts.py` writes every class's

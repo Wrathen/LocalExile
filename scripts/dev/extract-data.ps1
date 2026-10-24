@@ -37,6 +37,9 @@ $manifest = @(
     @{ Name = 'animation-contacts'; Outputs = @('data\animation-contacts.json'); Runner = 'python'
        Args = @('scripts/re/anim_contacts.py'); Version = 1; Needs = @('tables')
        UsedBy = 'spell release timing per class (11-skills.md)' }
+    @{ Name = 'monster-takehit'; Outputs = @('data\monster-takehit.json'); Runner = 'python'
+       Args = @('scripts/re/monster_takehit.py'); Version = 1; Needs = @('tables')
+       UsedBy = 'monster hit reaction: each variety''s TakeHit clip index in its rig (11-skills.md, 0x1b2)' }
 )
 
 function Need($ok, $message) { if (-not $ok) { throw "setup incomplete: $message (see Agents/GettingStarted.md)" } }
