@@ -222,7 +222,53 @@ What to build next is in [Roadmap.md](Roadmap.md). How the protocol works is in 
   ([11](docs/protocol/11-skills.md) §5).
 - **Spawn points.** Logins, Resurrect in Town and one-way entries other than The Twilight Strand → Lioneye's Watch
   use the area's spawn: the town's fixed point, or the walkable cell farthest from any edge in a generated area.
-- **Area seeds.** Non-town areas use seed 1 unless `Game_RANDOM_SEEDS=1`; each new seed needs its own walk map.
+- **Area seeds.** Non-town areas use seed 1 unless `Game_RANDOM_SEEDS=1`; each new seed needs its own walk map. The
+  port of the client's level generator has started ([re/011](docs/re/011-level-generation.md)): the RNG, the tile hash,
+  the extra-terrain-feature rolls and the topology pick match the live client, and Lioneye's Watch generates tile for
+  tile (`scripts/re/levelgen generate 1_1_town 1`), and so does The Twilight Strand at seed 1: tile graphs (`.tgr`)
+  are ported from the Voronoi jitter through edge tiling, vertex grounds, overlays, fill, mirror seams and the outer
+  buffer (all 3 276 entries, tile hash 266153788, all 3 772 tile-stage draws; `levelgen generate 1_1_1 1`). Other
+  seeds and areas still reach unported cases (re/011 §3g: overlay pass 2, the client's seed retry, the height levels;
+  The Coast seed 1 matches tile for tile and by tile hash (695393902), with Vaal side area entrances, the room
+  position search, the height levels, the level painting, room vertex grounds, the walkability pass, post-unique
+  tiles, the storeys stage, outer-buffer heights and the StoreyHeight scaling ported; The Northern Forest seed 1 also
+  matches by hash (2500166236); three Coast seeds, The Tidal Island, The Mud
+  Flats, The Northern Forest and The City of Sarn among them); multi-node `.dgr` dungeons are ported (The Ship Graveyard Cave seed 1
+  and the Prison `1_1_7_1` seeds 1, 1898277627, 4162278830 match by tile hash, re/011 §3c2: untagged nodes, special
+  rooms, door tiles, the outer ground's height fixing and the outer buffer; composite maps of `.dgr` subgraphs too:
+  the Prison's second level `1_1_7_2` seeds 1, 2512127042 match, re/011 §3c3; `.tgr` subgraphs on the shared map and
+  the extra room pool's mission rooms too: MapWorldsGorge seed 1 matches tile for tile (3320701478); The
+  Fetid Pool `1_1_3a` seed 1 matches tile for tile (401409093) with door types with a direction, fill rooms, slot
+  corners and 3 × 3 outer tiles; The Slave Pens `1_5_1` seed 1 by hash (3415378844) with the node door types and the
+  overlap tile fallbacks; The Reliquary `1_5_7`, The Ossuary `1_5_5` and eight more seed-1 traces since the plain
+  room slots, room grounds, seam tests, `s`-keyed fill rooms and dungeon post-unique tiles, and `2_10_2`, `2_10_5`,
+  `2_10_6`, `2_9_10_2` since the dungeon seams' edge-point fallback, MapWorldsGorge and MapWorldsToxicSewer since the
+  `.tgr` subgraphs and mission rooms, `1_4_2`, `1_4_6_*`, `2_7_8`, `2_8_10` and `2_9_10_1` since the shrine rooms,
+  the sub-area records (a rolled discoverable hideout's claim area beside the map: `2_8_5` matches every draw up to
+  its stop), the shuffle and unique node groups and the template nodes (`1_3_18_1` likewise), and since the Labyrinth
+  pass (secret nodes dropped, gold door, boss overrides; `LabyrinthPass.cs`) and the unmirrored spawner tiles 27 of the
+  41 Labyrinth traces plus `1_2_1`, `1_3_6`, `2_6_10`, `2_6_14`, `2_7_1` and others: 91 of the 197 seed-1 traces;
+  the oracle matches 143 of 710 logged seeds; the Labyrinth's final-boss areas of difficulty 2+ (FinalBoss pick
+  `0x1424e5ee0`) and the EndGame non-boss rooms are open), the
+  one-node `.dgr` path (hideouts) lacks the outer buffer, and the Gateway does not use the port yet. The walkability
+  and projectile grids are built from the generated tiles and doodads (re/011 §6b / §6c, `Walkability.cs`,
+  `DoodadStage.cs`, `DoodadHull.cs`, `levelgen walk`): the doodad stage places room doodads, the .ddt's random and
+  vertex doodads, then every placed tile's own objects (its `.tmd`), and stamps the Hull of each static one's `.ao`
+  as it goes; which room and tile lines are client objects follows their type's BaseEvents flags. The rooms a dungeon's
+  fill picks from its `.gft` (`Fills/plants*.arm`, `tent1.arm`: forced-blank tiles with doodad lines) count among the
+  record's rooms. On the 61 seed-1 captures whose tile hash matches, all 61 areas now match the client's walk and
+  projectile grids cell for cell (The Twilight Strand, The Coast, The Prison, the dungeons with forced-blank slots such
+  as `1_5_2` and `2_10_2`, The Dried Lake `1_4_2`, Chayula's monastery, …). The Twilight Strand matches every
+  doodad-stage draw and places all 250 captured doodads. AOSet doodads (`1_1_6`) and the objects of reskinned tiles
+  (`2_9_5`) are in. A fill room's own `.arm` vertex grounds now go in, so `2_8_10` matches every doodad-stage draw and
+  places all 1 083 captured doodads; its grids match since the outer buffer flags its vertices unwalkable (vertex
+  flag 8, as the client's spread does). Each tile's second objects file (the `.tmd` its `.tdt` names, tile +0x180)
+  is placed too, so the Prison areas (`1_1_7_1`, `1_1_7_2`, `2_6_7_1`) place all their captured doodads (their
+  archways). Tiles made of sub-tiles place each sub-tile's objects (ported from the code; no capture has such a
+  tile). `DoodadNoBlocking` objects are created (no collision), text `.tmd` objects sit at their own cells, and a
+  reskinned tile's objects keep the reskin's name unless the original `.ao` exists: 72 of the 117 areas the stage
+  reaches now place every captured doodad (was 56), and `2_10_6` matches every doodad-stage draw (the client's
+  animation-start draws there only touch the LCG).
 - **Projectiles.** Areas without a height grid (`scripts/re/frida/capture-terrain-tiles.js` + `scripts/walkmaps/heights.py`) fly the fireball on the terrain; it hits the first monster or wall on its path (checked at launch; walls from the
   projectile grid, Lioneye's Watch and The Coast seed 1) and explodes there, but doodads with their own colliders do not
   stop it ([11](docs/protocol/11-skills.md) §10).

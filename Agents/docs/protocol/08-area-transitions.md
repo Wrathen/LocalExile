@@ -229,7 +229,9 @@ match, their .tmd).
       first);
     - rotation = `Angle(room ∘ tile, record angle)`; the .tmd's 5th field is the record angle (f32, π/2 on Highgate's
       `AscentTransition`);
-    - z = the record's z. Text .tmd (version 8) gives no z.
+    - z = the record's z. Text .tmd (version 8) records are `cellX cellY hasPos [x y] z angle qx qy qz qw ? scale
+      "ao" "name" "mesh" "type" [n]` (all 3 345 records in the game files; the `.ao` comes first, empty for none), so
+      they give z and the angle too (before 2026-10-23 the parser took z as the angle).
 
 ### Results (run of 2026-10-17)
 

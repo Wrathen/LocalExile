@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Runs the server's port of the client's level generator against the game files and checks it against the client's
+       generation traces (data/walkability/<area>_seed<seed>.gen.json, live.ps1 -Walkmaps).
+       Agents/docs/re/011-level-generation.md. Oodle via Tools/ooz/ooz_worker.mjs (Node). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\GameServer.Data\GameServer.Data.csproj" />
+    <Compile Include="..\ggdump\NodeOodleDecoder.cs" Link="NodeOodleDecoder.cs" />
+  </ItemGroup>
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+</Project>

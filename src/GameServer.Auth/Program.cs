@@ -87,9 +87,13 @@ static async Task Serve(LoginServerKeys keys)
     // Non-town seeds are pinned to 1 (the Gateway only knows a generated layout from a per-seed client dump);
     // Game_RANDOM_SEEDS=1 gives every new instance its own random seed, except hideouts (a fixed layout: always 1).
     var hideouts = GameServer.Core.World.WorldAreaHideouts.Load(Path.Combine("data", "tables", "WorldAreas.json"));
+    // Game_SEED=<n> (dev) gives every new non-hideout instance that seed instead, for generation traces of one seed.
+    uint? fixedSeed = uint.TryParse(Environment.GetEnvironmentVariable("Game_SEED"), out var s) ? s : null;
     var registry = new GameServer.Core.World.InstanceRegistry
     {
-        SeedFor = Environment.GetEnvironmentVariable("Game_RANDOM_SEEDS") == "1"
+        SeedFor = fixedSeed is { } seed
+            ? area => hideouts.Contains(area) ? 1u : seed
+            : Environment.GetEnvironmentVariable("Game_RANDOM_SEEDS") == "1"
             ? area => hideouts.Contains(area) ? 1u : (uint)Random.Shared.Next(1, int.MaxValue)
             : _ => 1,
         Towns = towns.Select(t => t.Hash16).ToHashSet(),

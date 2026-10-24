@@ -364,6 +364,7 @@ Environment variables, read when each server starts:
 | `Game_AUTH_CONTROL_PORT` | 20495 | Auth ↔ Gateway control port (localhost only) |
 | `Game_CLIENT_EXE` | `Client/Game.exe` | client executable the Gateway reads protocol constants from |
 | `Game_RANDOM_SEEDS` | unset | `1` = random seeds for new non-town instances (each needs its own walk map) |
+| `Game_SEED` | unset | a number = that seed for every new non-town, non-hideout instance (generation traces of one seed with `live.ps1 -Walkmaps`; overrides `Game_RANDOM_SEEDS`) |
 | `Game_LEAGUE` | `standard` | `hardcore` shows the hardcore death screen (a single Exit button) |
 | `Game_START_WEAPON` | unset | `ground` = a new character's class weapon waits on the ground near the spawn instead of being worn |
 | `Game_FLASK_BUFFS` | unset | `0` = flasks recover without putting their flask_effect buff on the player |

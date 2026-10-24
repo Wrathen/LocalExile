@@ -150,8 +150,10 @@ public sealed record TileKey(int Width, int Height, int[] Edges, int[] Points, i
 public sealed record RoomSlot(int Column, int Row, TileKey Key);
 public sealed record NamedPoint(float X, float Y, float Angle, string Name);
 /// <summary>A doodad or server object of a room: cell, model, object type, angle (radians, as the client's placed doodads
-/// report it) and scale (the last number before the model: The Twilight Strand's force wall has 2.7).</summary>
-public sealed record RoomDoodad(float X, float Y, string Model, string Type, float Angle = 0, float Scale = 1);
+/// report it), scale (The Twilight Strand's force wall has 2.7), the flip flag (runtime +0x1c) and the fixed height
+/// (+0x10, null without one).</summary>
+public sealed record RoomDoodad(float X, float Y, string Model, string Type, float Angle = 0, float Scale = 1, bool Flip = false,
+    float? FixedHeight = null);
 
 /// <summary>A room (.arm): string dictionary, tag, size (from its own key line), named points (room cells), the tile
 /// slot grid (one row per line; k = tile key at its top-left slot, n = covered/none, s, f N) and doodads.</summary>
@@ -177,7 +179,8 @@ public sealed record RoomFile(int Version, IReadOnlyList<string> Dictionary, str
             int n = lines[at][0].Int; at++;
             for (int k = 0; k < n && at < lines.Length; k++, at++) dict.Add(lines[at].Count > 0 ? lines[at][0].Text : "");
         }
-        // The room's tag: the first line that is a single quoted string; the room key: the first "k" line after it.
+        // The room's tag: the first line that is a single quoted string; the room key: the first slot line after it
+        // (0x142a0e2a0 reads any slot: "k" with its values, or a 1 × 1 "s" (nothing) or "f N" (tag N) in fill rooms).
         string tag = "";
         for (int k = at; k < lines.Length; k++)
             if (lines[k].Count == 1 && lines[k][0].Quoted) { tag = lines[k][0].Text; at = k + 1; break; }
@@ -189,6 +192,14 @@ public sealed record RoomFile(int Version, IReadOnlyList<string> Dictionary, str
                 var v = lines[at].Skip(1).TakeWhile(x => x.IsNumber).Select(x => x.Int).ToList();
                 keyValues = v.Count;
                 roomKey = TileKey.From(v);
+                at++;
+                break;
+            }
+            else if ((lines[at].Count == 1 && lines[at][0].Text == "s") ||
+                     (lines[at].Count == 2 && lines[at][0].Text == "f" && lines[at][1].IsNumber))
+            {
+                roomKey = new TileKey(1, 1, new int[4], [3, 3, 3, 3, 3, 3, 3, 3], new int[4], new int[4],
+                    lines[at].Count == 2 ? lines[at][1].Int : 0, []);
                 at++;
                 break;
             }
@@ -214,7 +225,9 @@ public sealed record RoomFile(int Version, IReadOnlyList<string> Dictionary, str
             if (t.Count == 4 && t[0].IsNumber && t[1].IsNumber && t[2].IsNumber && t[3].Quoted)
                 points.Add(new NamedPoint(t[0].Float, t[1].Float, t[2].Float, t[3].Text));
         }
-        // Doodads after the grid: x y angle, a quaternion, two numbers, scale, "model.ao" "Metadata/…type" ….
+        // Doodads after the grid (0x142a0f3a0): x y, [has position, x y] (version ≥ 34), angle, [quaternion x y z w]
+        // (≥ 17), flip, [wake group] (> 24), has fixed height, [height], [scale] (> 13), "model.ao", "Metadata/…type"
+        // (before 13 a type number), then the rest of the line.
         var doodads = new List<RoomDoodad>();
         for (int k = gridAt < 0 ? at : gridAt + roomKey.Height; k < lines.Length; k++)
         {
@@ -222,8 +235,20 @@ public sealed record RoomFile(int Version, IReadOnlyList<string> Dictionary, str
             if (t.Count < 4 || !t[0].IsNumber || !t[1].IsNumber) continue;
             int q = t.FindIndex(x => x.Quoted && x.Text.EndsWith(".ao", StringComparison.OrdinalIgnoreCase));
             if (q < 0 || q + 1 >= t.Count || !t[q + 1].Quoted) continue;
-            doodads.Add(new RoomDoodad(t[0].Float, t[1].Float, t[q].Text, t[q + 1].Text,
-                t[2].IsNumber ? t[2].Float : 0, q > 3 && t[q - 1].IsNumber ? t[q - 1].Float : 1));
+            int i = 2;
+            if (version >= 34 && t[i++].Int != 0) i += 2;
+            float angle = t[i++].Float;
+            if (version >= 17) i += 4;
+            bool flip = t[i++].Int != 0;
+            if (version > 24) i++;
+            float? height = t[i++].Int != 0 ? t[i++].Float : null;
+            float scale = version > 13 ? t[i++].Float : 1;
+            if (i != q)
+            {
+                problem ??= $"doodad line {k + 1}: {q} fields before the model, expected {i}";
+                continue;
+            }
+            doodads.Add(new RoomDoodad(t[0].Float, t[1].Float, t[q].Text, t[q + 1].Text, angle, scale, flip, height));
         }
         return new RoomFile(version, dict, tag, roomKey, points, slots ?? [], doodads, problem);
     }

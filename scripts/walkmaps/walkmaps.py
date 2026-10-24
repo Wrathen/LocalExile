@@ -95,6 +95,8 @@ def on_message(message, data, out):
         save_object(out, payload)
     elif kind == "doodads":
         save_doodads(out, payload.get("doodads") or [])
+    elif kind == "generation":
+        save_generation(out, payload)
 
 
 USED = set()  # current.json nonces that already got their grid
@@ -176,6 +178,19 @@ def save_doodads(out, batch):
     os.replace(stem + ".doodads.json.tmp", stem + ".doodads.json")
     if len(found) == len(batch) or len(found) // 1000 != (len(found) - len(batch)) // 1000:
         log(f"{os.path.basename(stem)}: {len(found)} doodads")
+
+
+def save_generation(out, gen):
+    """The level generator's trace of one area load (random draws, placed tiles): <area>_seed<seed>.gen.json, named by
+    the area and seed the client generated (a retry with another seed gets its own file)."""
+    if not gen.get("area"):
+        return
+    stem = os.path.join(out, f"{gen['area']}_seed{gen['seed']}")
+    with open(stem + ".gen.json.tmp", "w", encoding="utf-8") as f:
+        json.dump(gen, f)
+    os.replace(stem + ".gen.json.tmp", stem + ".gen.json")
+    log(f"{os.path.basename(stem)}: generation trace, {len(gen.get('draws') or [])} draws, {len(gen.get('tiles') or [])} tiles, "
+        f"{gen.get('w')}x{gen.get('h')}, tile hash {gen.get('tileHash')}")
 
 
 def current_area(out):

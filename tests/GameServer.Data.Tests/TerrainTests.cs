@@ -62,14 +62,28 @@ public class TerrainTests
     {
         // Art/Models/Terrain/CaveDungeon/cave_exit_v01_01.tmd
         const string text = "version 8\r\n35 23 1 383.783 251.788 4.37114e-08 0 -0 0 0 1 0 1 \"\" \"cave_exit_v01_01_area_transition\" " +
-            "\"Art/Models/Terrain/CaveDungeon/cave_exit_v01_01_area_transition.fmt\" \"Metadata/MiscellaneousObjects/AreaTransition\"\r\n";
+            "\"Art/Models/Terrain/CaveDungeon/cave_exit_v01_01_area_transition.fmt\" \"Metadata/MiscellaneousObjects/AreaTransition\"\r\n" +
+            // Art/Models/Terrain/Beach/beach_waypoint_v01_01.tmd: the .ao is the first quoted field.
+            "0 22 1 5.83479 244.965 -0.400005 0 -0 0 0 1 0 1 \"Metadata/Effects/Environment/waypoint/new/waypoint_idle.ao\" " +
+            "\"beach_waypoint_v01_01_waypoint_effect\" \"Art/Models/Terrain/Beach/beach_waypoint_v01_01_waypoint_effect.fmt\" " +
+            "\"Metadata/Effects/Environment/waypoint/new/WaypointEffect\"\r\n" +
+            // Metadata/Terrain/Islands/Tiles/CoralDungeon/Abyss/Lava/cc_01.tmd: no world position.
+            "34 34 0 0 -0.5 0 0 0 1 0 1 \"Metadata/Terrain/Doodads/Islands/Volcano/Lava/VolcanoLava_3x3.ao\" \"\" \"\" " +
+            "\"Metadata/MiscellaneousObjects/Doodad_Distant_3\"\r\n";
         byte[] data = [0xff, 0xfe, .. Encoding.Unicode.GetBytes(text)];
-        var o = Assert.Single(TileObjectFile.Parse(data));
+        var objects = TileObjectFile.Parse(data);
+        Assert.Equal(3, objects.Count);
+        var o = objects[0];
         Assert.Equal("cave_exit_v01_01_area_transition", o.Name);
         Assert.Equal("Metadata/MiscellaneousObjects/AreaTransition", o.Type);
         Assert.Equal((35, 23), (o.CellX, o.CellY));
-        Assert.True(float.IsNaN(o.Z));
+        Assert.Equal(0f, o.Angle);
         Assert.Null(o.Animation);
+        Assert.Equal("Metadata/Effects/Environment/waypoint/new/waypoint_idle.ao", objects[1].Animation);
+        Assert.Equal(-0.400005f, objects[1].Z, 4);
+        Assert.Equal(0f, objects[1].Angle);
+        Assert.Equal((34, 34), (objects[2].CellX, objects[2].CellY));
+        Assert.Equal(-0.5f, objects[2].Angle);
     }
 
     [Fact]

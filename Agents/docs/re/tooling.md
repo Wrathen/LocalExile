@@ -135,6 +135,14 @@ Notes:
 - `Thread.backtrace(…, FUZZY)` also lists stale return addresses. Read it together with the disassembly.
 - Returning `false` from the exception handler lets the client continue normally (dialog or crash).
 
+### Level generation trace
+
+`live.ps1 -Walkmaps` also traces the level generator (every random draw and the placed tile grid) into
+`data/walkability/<area>_seed<seed>.gen.json`; `dotnet run --project scripts/re/levelgen -- hash <file>…` checks the
+tile hash. Traces also hold `graphs`, the tile graph at the layout's stage boundaries (`hookGraphStages`); `levelgen
+generate` compares the port's graph with them stage by stage; `relaxRecords` holds the relaxation's placement
+records. See [011-level-generation.md](011-level-generation.md) §8.
+
 ## 5. Windows crash data
 
 Without Frida, a crash leaves only the Application event log (event 1000: exception code and fault offset, i.e.

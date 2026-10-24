@@ -5,11 +5,13 @@ namespace GameServer.Data.Terrain;
 
 /// <summary>One placed object of a terrain tile, from the tile's <c>.tmd</c> file (next to its <c>.tgt</c>).
 /// Positions are tile-local world units (<see cref="TilePlacement.WorldPerCell"/> per cell); z negative is up.</summary>
-public sealed record TileObject(float X, float Y, float Z, uint Flags, float Angle, string Name, string Mesh, string Type, string? Animation)
+public sealed record TileObject(float X, float Y, float Z, uint Flags, float Angle, string Name, string Mesh, string Type, string? Animation,
+    (int X, int Y)? Cell = null)
 {
-    /// <summary>The tile-local cell the client uses (it stores the record as i32 x, i32 y cells).</summary>
-    public int CellX => (int)MathF.Floor(X / TilePlacement.WorldPerCell);
-    public int CellY => (int)MathF.Floor(Y / TilePlacement.WorldPerCell);
+    /// <summary>The tile-local cell the client uses (it stores the record as i32 x, i32 y cells): the text form's own
+    /// cell fields, else the world position's cell.</summary>
+    public int CellX => Cell?.X ?? (int)MathF.Floor(X / TilePlacement.WorldPerCell);
+    public int CellY => Cell?.Y ?? (int)MathF.Floor(Y / TilePlacement.WorldPerCell);
 
     /// <summary>The virtual model the client registers for the record: "&lt;.tdt folder&gt;/&lt;record name&gt;.ao"
     /// (not in the bundle index; Agents/docs/protocol/08-area-transitions.md §5).</summary>
@@ -62,9 +64,11 @@ public static partial class TileObjectFile
 
 public static partial class TileObjectFile
 {
-    /// <summary>The older text form (UTF-16, "version 8"): one record per line, <c>cellX cellY n worldX worldY a … "" "name"
-    /// "mesh" "type" ["ao"]</c>. Cell and world x/y agree (world / (250/23) = cell); the height is not derived from this
-    /// form (Z is NaN) and the angle is taken as the value after world y (≈ 0 in every record seen).</summary>
+    /// <summary>The older text form (UTF-16, "version 8"): one record per line, <c>cellX cellY hasPos [worldX worldY] z
+    /// angle qx qy qz qw ? scale "ao" "name" "mesh" "type" [n]</c> (every one of the 3 345 records in the game files).
+    /// The cell is the record's own (world / (250/23) can land one further: 2_10_6's cart blocker at world y 500 is cell
+    /// 45, as the client places it); without a world position the cell's middle is the world position. An empty "ao" is
+    /// none.</summary>
     public static IReadOnlyList<TileObject> ParseText(string text)
     {
         var lines = TerrainText.Lines(text);
@@ -75,9 +79,14 @@ public static partial class TileObjectFile
             var t = TerrainText.Tokenize(line);
             if (t.Count == 0) continue;
             int q = t.FindIndex(x => x.Quoted);
-            if (q < 6 || t.Count < q + 4) throw new InvalidDataException($"text .tmd record: {line}");
-            objects.Add(new TileObject(t[3].Float, t[4].Float, float.NaN, 0, t[5].Float, t[q + 1].Text, t[q + 2].Text, t[q + 3].Text,
-                t.Count > q + 4 && t[q + 4].Text.Length > 0 ? t[q + 4].Text : null));
+            bool hasPos = q > 2 && t[2].Float != 0;
+            if (q != (hasPos ? 13 : 11) || t.Count < q + 4) throw new InvalidDataException($"text .tmd record: {line}");
+            var (x, y) = hasPos
+                ? (t[3].Float, t[4].Float)
+                : ((t[0].Float + 0.5f) * TilePlacement.WorldPerCell, (t[1].Float + 0.5f) * TilePlacement.WorldPerCell);
+            int z = hasPos ? 5 : 3;
+            objects.Add(new TileObject(x, y, t[z].Float, 0, t[z + 1].Float, t[q + 1].Text, t[q + 2].Text, t[q + 3].Text,
+                t[q].Text.Length > 0 ? t[q].Text : null, ((int)t[0].Float, (int)t[1].Float)));
         }
         return objects;
     }
@@ -95,6 +104,9 @@ public static class TilePlacement
 
     /// <summary>Whether the code swaps width and height.</summary>
     public static bool Swaps(int code) => Table[code * 3] == 1;
+
+    /// <summary>The code's row of the table (the same bytes at <c>0x142fb7f78</c>, used for sub-tile objects).</summary>
+    public static (int T0, int T1, int T2) Row(int code) => (Table[code * 3], Table[code * 3 + 1], Table[code * 3 + 2]);
 
     /// <summary>A cell (x, y) of a w × h cell area placed with <paramref name="code"/>, relative to the placed origin:
     /// a = [w - x - 1, x, h - y - 1, y]; x' = a[T1 + 2·T0], y' = a[(T0 == 0 ? 2 : 0) + T2].</summary>
