@@ -172,6 +172,14 @@ Part of [Status](../Status.md); what to build next in this area is in
   Extra-point grants commit before runtime publication, including concurrent XP updates and failed-write checks.
   Code: `AscendancyCatalog`, `AscendancyProgress`, `OrdinaryPassiveRules`, `CharacterSaves`, Gateway progression.
   Docs: [scope, evidence and beginner steps](../docs/game/ascendancies.md).
+- Behemoth: historical native acceptance at `9657e0ad` covers three legal connected eight-point builds.
+  The candidate over main `c748f5fa` retains all nine notables and nine small nodes with automated checks.
+  Real-client acceptance covers selected-class combat, all 13 Rampage tiers, Rage-paid Vaal Ground Slam,
+  restrictions, critical strikes, Fortification, converted mana/armour and chaos mitigation.
+  Paid refunds, reallocation, transfer, pause, death, relog and a Gateway restart pass; ordinary selection still works.
+  Admission requires `Game_VERIFIED_BEHEMOTH=1` and an already installed, exact compatible client graph.
+  The check is read-only; native Labyrinth acquisition and other Vaal executors remain separate.
+  See the [per-node audit, explicit server models and evidence](../docs/game/phrecia-class-completion.md).
 
 - Antiquarian: all nine notables and nine small nodes execute through three legal connected eight-point builds.
   Native checks cover Ward/Adrenaline, final attributes/requirements, stun recovery, Enduring Cry duration,

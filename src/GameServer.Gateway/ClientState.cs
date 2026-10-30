@@ -98,6 +98,9 @@ sealed class SpawnedMonster(string label, WalkEstimator walk, int aggroRange, in
 {
     public MonsterAttack? Attack { get; init; }
     public bool Hostile { get; init; } = true;
+    public uint? OwnerId { get; init; }
+    public double RampageBlindUntil;
+    public int StunSerial;
     // What it is, for the experience and items its death gives (null for monsters made without a variety).
     public MonsterCatalog.Variety? Variety { get; init; }
     // Its known TakeHit clip lengths supply HitReaction's recovery duration. Native Actor TakeHit selects the actual
@@ -241,6 +244,7 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
             projectiles = [];
             if (Closed || PendingTransfer is not null || LeavingArea) return false;
             PendingTransfer = transfer;
+            RampageTransferAt = Program.ProjectileWorldTime(this);
             LeavingArea = true;
             InvalidateIncomingHits(clear: false);
             ProjectileEpoch++;
@@ -322,8 +326,20 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     }
 
     /// <summary>Applies the passive movement speed to the server's walk estimate; /set_speed is a dev override.</summary>
+    internal RampageSession Rampage { get; } = new();
+    internal RampageWorld RampageWorld { get; } = new();
+    internal RampageState.Value SentRampage { get; set; }
+    internal ushort RampageBuff { get; set; }
+    internal double? RampageTransferAt;
+    internal double VaalPreventionUntil;
+    internal bool SentVaalPrevention;
+    internal VaalUseReservation? VaalUse;
+
     public void ApplyMovementSpeed() =>
-        Walk.SetSpeed(Math.Max(1, Program.WalkSpeed * (100 + Pools.MovementVelocityPct) / 100 * ElementalAilments.ActionFactor(Clock.Elapsed.TotalSeconds)), Clock.Elapsed.TotalSeconds);
+        ApplyMovementSpeedAt(Clock.Elapsed.TotalSeconds);
+    internal void ApplyMovementSpeedAt(double at) =>
+        Walk.SetSpeed(Math.Max(1, Program.WalkSpeed * (100L + Pools.MovementVelocityPct
+            + Program.RampageMovement(this)) / 100.0 * ElementalAilments.ActionFactor(at)), at);
 
     /// <summary>Replaces an area transition of this connection's layout (dev changes; the walk estimate keeps going).</summary>
     public void ReplaceAreaTransition(uint id, AreaTransitionObject transition) =>
@@ -495,7 +511,11 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
             lock (Monsters)
             {
                 // Resource loss belongs to the actual death transition, never a delayed death notification.
-                if (playerLife > 0 && value == 0) VaalSouls.ClearBalance();
+                if (playerLife > 0 && value == 0)
+                {
+                    VaalSouls.ClearBalance(); VaalPreventionUntil = 0; VaalUse = null;
+                    Rage.Clear(); Rampage.Clear(); RampageWorld.Disable();
+                }
                 playerLife = value;
             }
         }

@@ -43,7 +43,7 @@ partial class Program
     static void RageWhenHitLocked(ClientState conn)
     {
         if (conn.RageRetired || conn.Closed || conn.LeavingArea || conn.Paused) return;
-        if (conn.PlayerLife == 0) { conn.Rage.Clear(); return; }
+        if (conn.PlayerLife == 0) { conn.Rage.Clear(); conn.Rampage.Clear(); conn.RampageWorld.Disable(); return; }
         if (conn.Character is null) return;
         var stats = CharacterPlayerStats(conn);
         conn.Rage.EnemyHit(ProjectileWorldTime(conn), RageStats.Inputs(name => RageStat(stats, name)),
@@ -102,7 +102,8 @@ partial class Program
         var stats = CharacterPlayerStats(conn);
         var inputs = RageStats.Inputs(name => RageStat(stats, name));
         var value = conn.Rage.Read(ProjectileWorldTime(conn), inputs);
-        if (conn.SentRage == value) return [];
+        bool prevention = RageStat(stats, "has_soul_gain_prevention") != 0;
+        if (conn.SentRage == value && conn.SentVaalPrevention == prevention) return [];
         var bytes = new List<byte>();
         if (conn.RageBuff != 0) bytes.AddRange(InstanceEntities.RemoveBuff(PlayerId, conn.RageBuff));
         conn.RageBuff = 0;
@@ -118,6 +119,7 @@ partial class Program
             ? p.Skills : PlayerSkills(conn);
         bytes.AddRange(InstanceEntities.PlayerSkillsChange(PlayerId, skills, []));
         conn.SentRage = value;
+        conn.SentVaalPrevention = prevention;
         Console.WriteLine($"[gateway] {CharacterName(conn)} Rage {value.Current}/{value.Maximum}, "
             + $"effective {value.Effective}, policy v{RageState.PolicyVersion} "
             + $"(t={conn.Clock.Elapsed.TotalSeconds:0.000})");

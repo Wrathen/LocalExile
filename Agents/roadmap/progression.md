@@ -56,3 +56,7 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
   See [Aristocrat](../docs/game/aristocrat.md).
 - **Done when:** quest rewards persist and the native Altar can choose an ordinary ascendancy, with real-client checks.
   Implementing all 19 Phrecia classes' special gameplay is separate from this selection lifecycle.
+  The [class acceptance list](../docs/game/phrecia-class-completion.md) covers all notables and remaining dependencies.
+  Behemoth's historical native acceptance is at `9657e0ad`; current-main integration has automated checks only.
+  Repeat whole-class native acceptance after the shared class integrations are finalized.
+  Their completed scope and evidence are in [Status](../status/progression.md).

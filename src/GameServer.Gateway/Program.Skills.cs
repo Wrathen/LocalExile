@@ -204,6 +204,7 @@ partial class Program
         // Mageblood's permanent flasks deduplicated against the running ones, plus the flask grounds.
         int FlaskGet(string name) => Stats.Key(name) is uint k ? stats.GetValueOrDefault(k) : 0;
         UtilityFlasks.AddRawStats(stats, UtilityStats(conn, FlaskGet).Concat(conn.FlaskGrounds.PlayerStats()), Stats);
+        WithVaalPrevention(conn, stats);
         WithRage(conn, stats);
         // The character panel's sums of base forms (PanelStats); a stat /set_stat set keeps its value.
         ActorScale.Project(stats, rawOverrides, CosmeticScaleSources(conn));
@@ -261,6 +262,7 @@ partial class Program
             stats[attackDamage] = ArmourAttackDamage.Total(Get("attack_damage_+%"),
                 Get("physical_damage_reduction_rating"), Get(ArmourAttackDamage.Per450Armour),
                 Get("evasion_rating"), Get(ArmourAttackDamage.Per450Evasion));
+        WithRampage(conn, stats);
         // Whaletooth Bangle uses complete groups of final Strength. Derive from this fresh snapshot once; never
         // write back into raw sources. An explicit final-duration /set_stat keeps its usual replacement semantics.
         if (Stats.Key(SkillDurationModifiers.IncreasedDuration) is uint durationKey && !devSet.Contains(durationKey))
@@ -665,6 +667,8 @@ partial class Program
             if (SkillsFor(conn).VaalBudget(effect, supported.Level) is not null)
                 PublishVaalSoulInputs(conn, playerStats, own, stats);
             ApplyProjectilePanelStats(effect, stats);
+            if (SkillsFor(conn).VaalBudget(effect, supported.Level) is not null)
+                PublishVaalRageCost(conn, id, stats);
             if (SkillsFor(conn).FindByRow(id, effect, supported.Level, [.. stats.Select(kv => (kv.Key, kv.Value))]) is { } skill)
             {
                 Console.WriteLine($"[gateway] gem skill 0x{skill.Id:x4} {name} level {level} quality {quality} (effect {effect}): GEPL {skill.EffectsPerLevelRow}, " +
@@ -1050,6 +1054,7 @@ partial class Program
     // Actor 0x20 update (PlayerSkillsChange): the 0x40 list neither removes skills nor tells the character panel.
     static async Task SendSkills(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
+        RefreshVaalSouls(conn);
         lock (conn.Monsters)
         {
             if (conn.Closed || conn.LeavingArea || conn.RageRetired) return;

@@ -19,6 +19,7 @@ The shipped alternate graph contains older ordinary-tree topology.
 A separately agreed client-compatible graph is required before Phrecia can be enabled in an actual game connection.
 Antiquarian has an explicit `Game_VERIFIED_ANTIQUARIAN=1` opt-in which verifies exact installed archive bytes read-only.
 Its [whole-class audit](antiquarian.md) records the hashes, all node consumers, legal builds and native acceptance.
+Behemoth has a read-only opt-in behind `Game_VERIFIED_BEHEMOTH=1`; see [its class audit](phrecia-class-completion.md).
 Other Phrecia choices are refused before saving, and their existing saves refuse admission before inventory loading
 or passive normalization, retaining their data.
 There is no automatic graph installation, recovery, archive rewrite, or memory-hook workaround in this slice.
@@ -144,6 +145,10 @@ The first observer attempt timed out before feature checks; the accepted run use
 The solution built without warnings; Core 638, Data 18 and Gateway 3507 tests passed with public extracted data.
 Family-specific Herald, Link, minion and Vaal execution engines remain separate, as does Phrecia client admission.
 This slice does not implement global active-gem levels/quality, additional support-level bonuses or item-local gem levels.
+The identity/point lifecycle itself adds no Ward, Rage, charge, minion or other signature gameplay engine.
+Choosing a class is not evidence that its signature gameplay works.
+Behemoth has historical native acceptance; see [the class audit](phrecia-class-completion.md).
+That document separates the current-main automated candidate from the earlier whole-class native evidence.
 
 ### Forest Tracking attack damage
 
@@ -212,6 +217,8 @@ The client archive was unchanged, and the accepted normal Gateway was restored a
 To repeat, start the single client through `scripts/dev/live.ps1` and use the ordinary commands above.
 Compare the trace's `ascendancyPassives` and `ascendancyGraph` observations with the Gateway log and saved progress.
 The smoke does not test the native Altar chooser, every ordinary class, or special ascendancy combat mechanics.
+That historical smoke does not establish Phrecia gameplay.
+The historical Behemoth audit verifies compatible-graph admission, gameplay and return to ordinary Juggernaut.
 That historical selection-only smoke does not replace the separate Antiquarian gameplay acceptance.
 
 Protocol fields and native evidence: [progression](../protocol/15-progression.md) and

@@ -4,7 +4,10 @@
 /// </summary>
 static class AscendancyClientCompatibility
 {
-    public static void RequirePlayable(AscendancyIdentity? selection)
+    public static void RequirePlayable(AscendancyIdentity? selection) => RequireCompatible(selection,
+        Environment.GetEnvironmentVariable("Game_VERIFIED_BEHEMOTH") == "1", VerifiedBehemothGraph.RequireInstalled);
+
+    internal static void RequireCompatible(AscendancyIdentity? selection, bool optedIn, Action verifyInstalled)
     {
         if (selection is { Family: AscendancyFamily.Phrecia, Id: "Gladiator", Revision: "3.29.3b" }
             && Environment.GetEnvironmentVariable("Game_VERIFIED_GAMBLER") == "1")
@@ -25,8 +28,16 @@ static class AscendancyClientCompatibility
             return;
         }
         if (selection?.Family == AscendancyFamily.Phrecia)
+        {
+            if (selection.Id == "Berserker" && selection.Revision == AscendancyCatalog.Revision
+                && optedIn)
+            {
+                verifyInstalled();
+                return;
+            }
             throw new AscendancyRuleException("Phrecia play is gated pending an agreed client-compatible passive graph; " +
                 "the installed client archive is not changed. Ordinary ascendancies remain available. " +
                 "See Agents/docs/game/ascendancies.md");
+        }
     }
 }

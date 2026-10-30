@@ -12,7 +12,8 @@ static class SkillArea
 
     /// <summary>Explicit data wins. Cyclone's base radius is not in its exported stat set (PoB: 16 cells).</summary>
     public static int BaseRadius(string? effect, Func<string, int> get) =>
-        get("active_skill_base_area_of_effect_radius") is int radius and > 0 ? radius : IsCyclone(effect) ? 16 : 12;
+        get("active_skill_base_area_of_effect_radius") is int radius and > 0 ? radius
+            : effect == "VaalGroundSlam" ? 40 : IsCyclone(effect) ? 16 : 12;
 
     static readonly string[] MoreArea =
     [

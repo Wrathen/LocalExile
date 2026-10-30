@@ -27,7 +27,7 @@ partial class Program
         AttackAccuracyProfile profile)
     {
         int evasion = target.Mods.Effects.Evasion(Monsters.BaseEvasion(target.Level) ?? 0);
-        evasion = conn.FlaskGrounds.Evasion(id, evasion);
+        evasion = RampageBlindedValue(target, at, evasion, conn.FlaskGrounds.Evasion(id, evasion));
         bool close = TargetAccuracy.InCloseRange(Dist(conn.Walk.Position(at), target.Walk.Position(at)));
         return profile.Chance(evasion, target.Rarity == MonsterRarity.Unique, close);
     }
@@ -128,6 +128,7 @@ partial class Program
     internal static async Task Attack(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, SpawnedMonster m, double requestedAt)
     {
+        if (m.OwnerId is not null) return;
         int projectileEpoch;
         lock (conn.Monsters) projectileEpoch = conn.ProjectileEpoch;
         var weapon = WeaponFor(conn);
@@ -248,7 +249,8 @@ partial class Program
             impaleStored = m.Impale.Bonus;
             FortificationOnHitLocked(conn, m, RawFortificationDamage(ownRolled, critical, criticalMultiplier),
                 WeaponProfileFor(conn, activeSet: true).Melee, player, ownPenetration);
-            (m.Life, stageStarts) = TakeDamageLocked(m, damage);
+            RampageOnMeleeHitLocked(conn, m, WeaponProfileFor(conn, activeSet: true).Melee);
+            (m.Life, stageStarts) = TakeOwnerDamageLocked(conn, m, damage);
             if (stageStarts)
             {
                 CommitBossStage(remote, stream, ciphers, conn, use.TargetId, m, ProjectileWorldTime(conn));
@@ -295,6 +297,7 @@ partial class Program
     static async Task CastOn(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, SpawnedMonster m, double requestedAt)
     {
+        if (m.OwnerId is not null) return;
         var gem = GemSkillEffects(conn).FirstOrDefault(g => g.Id == use.SkillId);
         if (gem.Name is not null && !ProjectilePathAvailable(remote, conn, use.SkillId, gem.Effect)) return;
         // A movement attack (Flicker Strike, Leap Slam) closes the distance itself, and an attack used with "always attack
@@ -412,10 +415,11 @@ partial class Program
             await SendPlayerMana(remote, stream, ciphers, conn, $"0x01b1 player mana {conn.PlayerMana} (disabled skill, cost back)");
             return false;
         }
-        // Soul collection/display does not enable a Vaal executor or a payment path.
-        if (gem.Name is not null && SkillsFor(conn).VaalSouls(gem.Effect, gem.Level) is int souls and > 0)
+        bool vaalCast = gem.Name is not null && SkillsFor(conn).VaalBudget(gem.Effect, gem.Level) is not null;
+        VaalUseReservation? vaalUse = null;
+        if (vaalCast && (vaalUse = ExecuteVaalUse(conn, skillId, gem.Effect)) is null)
         {
-            Console.WriteLine($"[gateway] {remote} skill 0x{skillId:x4} {gem.Name}: Vaal execution unsupported (base cost {souls} souls)");
+            Console.WriteLine($"[gateway] {remote} skill 0x{skillId:x4} {gem.Name}: no executable paid Vaal admission");
             return false;
         }
         // Eligible uses arrive with their one original preflight reservation. Never reserve again after an await.
@@ -478,8 +482,8 @@ partial class Program
             return await ToggleAura(remote, stream, ciphers, conn, skillId, gem.Effect, gem.Name, reservation,
                 SupportedSkill(conn, skillId).Level, SupportedSkill(conn, skillId).Quality);
         }
-        SkillCriticalRoll? criticalRoll = null;
-        if (gem.Name is not null)
+        SkillCriticalRoll? criticalRoll = vaalUse?.CriticalRoll;
+        if (gem.Name is not null && !vaalCast)
         {
             uint cost;
             bool paid;
@@ -511,6 +515,7 @@ partial class Program
                     $"0x01b1 player mana {conn.PlayerMana} (-{cost} for {gem.Name}) (t={conn.Clock.Elapsed.TotalSeconds:0.000})");
             }
         }
+        if (vaalCast) await PublishVaalUse(remote, stream, ciphers, conn);
         if (!Current()) return false;
         if (channelGeneration is not null)
         {
@@ -821,7 +826,7 @@ partial class Program
             : AttackContactDelay(conn, SupportedAttackSeconds(conn, skillId), approach: false);
         int radius = SkillRadius(conn, skillStats, spell, gem.Effect);
         // A melee skill aimed far away still lands in front of the player.
-        var centre = !spell && Dist(from, to) > radius + weapon.Range ? from : to;
+        var centre = VaalExecutor(conn, gem.Effect) || !spell && Dist(from, to) > radius + weapon.Range ? from : to;
         int action = actionToken ?? cooldownUse?.ActionToken ?? conn.ActionCount;
         if (cooldownUse?.Instant != true && conn.ActionCount != action) return;
         // A channel's hits (Cyclone, C→S 0x197) land at once, where the player is.
@@ -841,7 +846,7 @@ partial class Program
                 && PlayerActionBlocked(conn, conn.Clock.Elapsed.TotalSeconds, conn.Clock.Elapsed.TotalSeconds)) return;
             // Queued mana output may outlast movement: resolve a channel at its current position.
             if (channelGeneration is not null) centre = conn.Walk.Position(now);
-            targets = [.. conn.Monsters.Where(e => e.Key != excludeMonster && !e.Value.Dead && e.Value.Life > 0 && Dist(e.Value.Walk.Position(now), centre) <= radius)
+            targets = [.. conn.Monsters.Where(e => e.Key != excludeMonster && !e.Value.Dead && e.Value.Life > 0 && e.Value.OwnerId is null && Dist(e.Value.Walk.Position(now), centre) <= radius)
                 .Select(e => (e.Key, e.Value))];
         }
         bool fortificationGranted = false; // One simultaneous sweep, independent of notification latency.
@@ -887,11 +892,18 @@ partial class Program
                     impale = ImpaleStats.From(player, Stats, !spell, skillStats, local);
                     criticalImpale = ImpaleStats.From(player, Stats, !spell, skillStats, local, critical: true);
                 }
+                var contactHit = sweepHit;
+                if (VaalExecutor(conn, gem.Effect))
+                {
+                    double distance = Dist(conn.Walk.Position(ProjectileWorldTime(conn)), m.Walk.Position(ProjectileWorldTime(conn)));
+                    contactHit = contactHit.Scale(1 + Stat("groundslam_damage_to_close_targets_+%_final")
+                        / 100.0 * Math.Max(0, 1 - distance / Math.Max(1, radius)));
+                }
                 int hitChance = spell ? 100 : AttackHitChanceAt(conn, id, m, ProjectileWorldTime(conn), accuracy);
                 if (!spell && !accuracy.CannotBeEvaded && !m.AttackEvasion.Hits(hitChance, ProjectileWorldTime(conn), conn.AttackAccuracyRandom)) continue;
                 if (MonsterBlocks(m, Random.Shared, spell)) continue;
                 var gambler = GamblerFor(player);
-                var rolled = (gambler with { DamageMorePct = 0 }).RollOutgoingHit(sweepHit, Random.Shared);
+                var rolled = (gambler with { DamageMorePct = 0 }).RollOutgoingHit(contactHit, Random.Shared);
                 critical = RollCriticalStrike(conn, SupportedCriticalChance(conn, skillId), skillStats, attack: !spell, skillRoll: criticalRoll)
                     && (spell || GameServer.Core.World.EvasionEntropy.ConfirmsCritical(hitChance, conn.AttackAccuracyRandom));
                 int multiplier = CriticalMultiplierOn(m, sweepMultiplier);
@@ -902,6 +914,7 @@ partial class Program
                 LeechOnHitLocked(conn, m, taken, damage, leech!);
                 damage = WithImpaleHitLocked(conn, m, damage, rolled, critical, sweepMultiplier,
                     critical ? criticalImpale : impale, more).Damage;
+                RampageOnMeleeHitLocked(conn, m, !spell && SkillsFor(conn).IsMelee(gem.Effect));
                 applied = ApplyMonsterHitLocked(conn, m, damage);
                 if (applied is not null) landed++;
                 if (applied is { StageStarts: true } staged)
@@ -1017,7 +1030,7 @@ partial class Program
     static MonsterHit? ApplyMonsterHitLocked(ClientState conn, SpawnedMonster m, int damage)
     {
         if (m.Dead || m.Life == 0) return null;
-        (m.Life, bool starts) = TakeDamageLocked(m, damage);
+        (m.Life, bool starts) = TakeOwnerDamageLocked(conn, m, damage);
         conn.LastEnemyHitAt = ProjectileWorldTime(conn);
         if (m.Life == 0) { m.Aggro = false; m.Dead = true; CollectVaalSoulAtDeathLocked(conn, m); }
         return new(m.Life, starts);
@@ -1116,6 +1129,13 @@ partial class Program
 
     // A hit's damage off a monster's life (under the Monsters lock): the new life, and whether the hit starts its boss stage
     // (BossFights; the stage is then taken, so it runs once).
+    static (uint Life, bool StageStarts) TakeOwnerDamageLocked(ClientState conn, SpawnedMonster m, int damage)
+    {
+        var result = TakeDamageLocked(m, damage);
+        if (m.Life > 0 && result.Life == 0) RampageOnKillLocked(conn, m);
+        return result;
+    }
+
     internal static (uint Life, bool StageStarts) TakeDamageLocked(SpawnedMonster m, int damage)
     {
         // While the stage runs the boss cannot die: its life fills up at the end anyway.
@@ -1168,6 +1188,10 @@ partial class Program
     // enough and it drops its items around where it fell (ItemDrops). Its corpse stays where it fell for as long as the
     // player is in the area (it stays in Monsters as Dead: no AI, no body collision); leaving does not save it.
     static async Task MonsterKilled(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id, SpawnedMonster m)
+        => await MonsterKilledBy(remote, stream, ciphers, conn, id, m, playerKill: true);
+
+    static async Task MonsterKilledBy(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+        uint id, SpawnedMonster m, bool playerKill)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         (int X, int Y) at, player;
@@ -1175,7 +1199,7 @@ partial class Program
         lock (conn.Monsters) { at = m.Walk.Position(now); player = conn.Walk.Position(now); alive = conn.PlayerLife > 0; }
         await SendVaalSouls(remote, stream, ciphers, conn);
         if (m.Variety is not { } variety || !m.Hostile) return;
-        ChargesOnKill(conn, m);
+        if (playerKill) ChargesOnKill(conn, m);
         if (conn.Layout.Id == TutorialObjects.Strand && variety.Id == TutorialObjects.Zombie
             && CharacterSaves.Load(CharacterName(conn))?.Tutorial is { ZombieKilled: false })
         {

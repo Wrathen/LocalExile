@@ -67,7 +67,7 @@ partial class Program
                     : own.GetValueOrDefault(key) + value;
             }
         double costMultiplier = supports.Aggregate(1.0, (v, s) => v * s.CostMultiplier / 100.0);
-        foreach (string stat in new[] { "mana_cost", "base_mana_cost" })
+        foreach (string stat in new[] { "mana_cost", "base_mana_cost", "base_rage_cost", "total_base_rage_cost" })
             if (Stats.Key(stat) is uint k && own.TryGetValue(k, out int cost)) own[k] = (int)Math.Floor(cost * costMultiplier);
         // Global added damage on support gems applies to this skill, not to the character or other link groups.
         foreach (string type in new[] { "physical", "fire", "cold", "lightning", "chaos" })

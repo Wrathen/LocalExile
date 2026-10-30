@@ -46,6 +46,14 @@ Part of [Status](../Status.md); what to build next in this area is in
   Supported contacts, area-sweep deduplication, queued refreshes and the 140-damage/11-Fortification composition
   have automated coverage; further native composition checks remain in [26-rage.md](../docs/protocol/26-rage.md).
   Capped attempted gains and frozen destination-loading time use explicit LocalExile policy v1.
+- Behemoth combat has historical selected-class native acceptance at `9657e0ad` in legal eight-point builds.
+  Integration over main `c748f5fa` has automated checks only; native acceptance has not been repeated.
+  All 13 Rampage plans execute real owned attacks/projectiles, corpse effects, blind, stun and animated weapons.
+  Fortification, Rage, critical policy, mana conversion and both armour defences compose with those builds.
+  Vaal Ground Slam has atomic Rage payment, a pausable Soul Gain Prevention countdown and explicit refusal gates.
+  Historical native keyboard use, pause, death, refund, travel, relog and Gateway restart passed.
+  Other Vaal executors remain refused; geometry/timing and Fortification generation use documented server models.
+  See the [whole-class audit and evidence](../docs/game/phrecia-class-completion.md).
 
 - Mana per final Strength (#287): `X_mana_per_4_strength` joins the ordinary flat mana bucket before increases.
   Thirteen native controls verify complete four-Strength groups, signed inputs, source removal and relog.
@@ -707,7 +715,9 @@ Part of [Status](../Status.md); what to build next in this area is in
 
 
 The generic [projectile framework](../docs/game/projectile-framework.md) owns production gem/bow routing and
-the sole 30 Hz runtime. Catalog fallback provides basic flight; registered skill definitions supply special rules
+the sole 30 Hz runtime.
+Unknown area dimensions no longer become an immediate projectile wall when walk captures are absent.
+Catalog fallback provides basic flight; registered skill definitions supply special rules
 and can require explicit recipes.
 
 - Arcane Might (#364) shares one highest-eligible-ratio consumer across current attacks and damage panels.
