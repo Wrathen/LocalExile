@@ -19,6 +19,8 @@ static class CurrencyEffects
     public const string RegalOrb = "Metadata/Items/Currency/CurrencyUpgradeMagicToRare";
     public const string ExaltedOrb = "Metadata/Items/Currency/CurrencyAddModToRare";
     public const string OrbOfAnnulment = "Metadata/Items/Currency/CurrencyRemoveMod";
+    public const string EnkindlingOrb = "Metadata/Items/Currency/CurrencyEnkindlingOrb";
+    public const string InstillingOrb = "Metadata/Items/Currency/CurrencyInstillingOrb";
     public const string LesserEldritchIchor = "Metadata/Items/Currency/CurrencyEldritchIchor1";
     public const string GreaterEldritchIchor = "Metadata/Items/Currency/CurrencyEldritchIchor2";
     public const string GrandEldritchIchor = "Metadata/Items/Currency/CurrencyEldritchIchor3";
@@ -27,6 +29,15 @@ static class CurrencyEffects
     public const string GreaterEldritchEmber = "Metadata/Items/Currency/CurrencyEldritchEmber2";
     public const string GrandEldritchEmber = "Metadata/Items/Currency/CurrencyEldritchEmber3";
     public const string ExceptionalEldritchEmber = "Metadata/Items/Currency/CurrencyEldritchEmber4";
+
+    /// <summary>Enkindling Orb: adds one of the five official Enkindling enchantments to a utility flask, replacing an
+    /// existing Enkindling and any Harvest/bench enchantment; an existing Instilling stays. The flask keeps its
+    /// rarity, name, quality, affixes and charges.</summary>
+    public static Item? Enkindling(Item item, ItemRolls rolls, Random random) => rolls.Enkindling(item, random);
+
+    /// <summary>Instilling Orb: adds one of the fifteen spawnable official Instilling trigger enchantments to a utility
+    /// flask, replacing an existing Instilling and any Harvest/bench enchantment; an existing Enkindling stays.</summary>
+    public static Item? Instilling(Item item, ItemRolls rolls, Random random) => rolls.Instilling(item, random);
 
     /// <summary>The Eater of Worlds implicit tier an Eldritch Ichor adds (Lesser 1 … Exceptional 4).</summary>
     public static int? EldritchIchorTier(string id) => id switch

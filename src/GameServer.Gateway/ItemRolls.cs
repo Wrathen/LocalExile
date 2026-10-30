@@ -21,6 +21,50 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data")
     private readonly Lazy<List<Word>> _words = new(() => LoadWords(folder));
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(int Row, int Level), IReadOnlyList<(ModCatalog.Mod, int)>> _pools = new();
 
+    /// <summary>The Enkindling enchantments a utility flask can receive (Mods.dat GenerationType 21).</summary>
+    public IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> EnkindlingPool(ItemCatalog.BaseType type) =>
+        FlaskEnchantPool(type, 21);
+
+    /// <summary>The Instilling trigger enchantments a utility flask can receive (Mods.dat GenerationType 22).</summary>
+    public IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> InstillingPool(ItemCatalog.BaseType type) =>
+        FlaskEnchantPool(type, 22);
+
+    /// <summary>Enkindling Orb: one of the five official enchantments, replacing an existing Enkindling (and any
+    /// Harvest/bench enchantment) while keeping an existing Instilling.</summary>
+    public Item? Enkindling(Item item, Random random) => FlaskEnchant(item, 21, random);
+
+    /// <summary>Instilling Orb: one of the fifteen spawnable trigger enchantments, replacing an existing Instilling (and
+    /// any Harvest/bench enchantment) while keeping an existing Enkindling.</summary>
+    public Item? Instilling(Item item, Random random) => FlaskEnchant(item, 22, random);
+
+    /// <summary>Flask enchantment pool: Mods.dat Domain 1, the Enkindling (21) or Instilling (22) generation type, and a
+    /// positive spawn weight for the flask's tags (the game gives the "flask" tag; zero-weight rows never spawn).</summary>
+    IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> FlaskEnchantPool(ItemCatalog.BaseType type, int generationType) =>
+        [.. catalog.Mods.All
+            .Where(m => m.Domain == 1 && m.GenerationType == generationType)
+            .Select(m => (Mod: m, Weight: m.WeightFor(type.Tags))).Where(p => p.Weight > 0)];
+
+    /// <summary>Official flask enchantment: only utility flasks (not life or mana flasks), any rarity, unmodifiable,
+    /// corrupted and mirrored targets refused. Enkindling (21) and Instilling (22) are separate enchantments and keep
+    /// each other; every other enchantment (the Harvest/bench family, other enchant-list mods) is replaced. The rest of
+    /// the item stays as it was.</summary>
+    Item? FlaskEnchant(Item item, int generationType, Random random)
+    {
+        if (!item.Components.Contains("Flask") || !TryModifiable(item, out var type) || !type.Tags.Contains("utility_flask"))
+            return null;
+        var pool = FlaskEnchantPool(type, generationType);
+        if (pool.Count == 0) return null;
+        int otherType = generationType == 21 ? 22 : 21;
+        var kept = item.Mods.Where(m =>
+        {
+            if (catalog.Mods.ByHash(m.Hash) is not { } mod) return m.Section != ModSection.Enchant;
+            if (m.Section == ModSection.Enchant) return mod.GenerationType == otherType;
+            return !(mod.ModType.Contains("FlaskEnchantment", StringComparison.Ordinal) && mod.GenerationType != otherType);
+        }).ToList();
+        kept.Add(Pick(pool, random).Roll(ModSection.Enchant, random));
+        return item with { Mods = kept };
+    }
+
     /// <summary>The affixes that can roll on this base at this item level.</summary>
     public IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> Pool(ItemCatalog.BaseType t, int itemLevel) =>
         _pools.GetOrAdd((t.Row, itemLevel), _ => [.. catalog.Mods.All

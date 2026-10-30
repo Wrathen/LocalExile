@@ -223,12 +223,28 @@ Part of [Status](../Status.md); what to build next in this area is in
   coverage. A separate Eldritch dominance state and the Orb of Conflict remain separate, and native tooltip
   acceptance is pending.
   See [13](../docs/protocol/13-items.md), "Eldritch Embers", and [evidence](../docs/re/eldritch-ember-coe.md).
+- **Enkindling Orb:** a utility flask of any rarity gets one of the five GenerationType 21 enchantments (increased
+  effect / duration / Charge Recovery / maximum Charges, or reduced Charges per use, all with `Gains no Charges during
+  Effect`) with the game's 250/100/100/100/100 weights. Life/mana, corrupted/mirrored, non-flask and
+  unsupported/unmodifiable targets are refused before spending. An existing Enkindling is replaced; an existing
+  Instilling and the flask's explicit affixes, quality, charges, rarity and name stay. Harvest/bench flask
+  enchantments (GenerationType 3, family `FlaskEnchantment`) are removed. CoE pool/weights and native coexistence
+  checks have automated coverage; see [13](../docs/protocol/13-items.md), "Enkindling Orb and Instilling Orb", and
+  [evidence](../docs/re/enkindling-coe.md).
+- **Instilling Orb:** the Searing Exarch counterpart: a utility flask gets one of the fifteen spawnable GenerationType
+  22 trigger enchantments (charges full, frozen/chilled/shocked/ignited/bleeding/poisoned, block, savage hit, guard or
+  travel skill, rare/unique hit, adjacent flask, effect end, life flask), equal weight. The sixteenth row
+  (`Used when you lose a Guard Skill Buff`) has spawn weight 0 in 3.29.3b and is excluded, as are the bench recipes.
+  An existing Instilling is replaced; an existing Enkindling and the rest of the item stay. See
+  [13](../docs/protocol/13-items.md), "Enkindling Orb and Instilling Orb", and
+  [evidence](../docs/re/instilling-coe.md).
 - **Visual client acceptance (2026-10-30):** the main successful uses of all implemented currencies were checked in
   the 3.29.3b client: Transmutation, Augmentation, Regal, Alteration, Alchemy, Exalted, Chaos, Vaal, Chance,
-  Annulment, all four Eldritch Ichors and all four Eldritch Embers. Vaal turned normal items rare (yellow) and the
-  tooltip showed `Corrupted`; the Eater/Exarch implicit names, values and tiers were visible. No visual defects were
-  found. Vaal on jewels remains outside the local rule; official jewel/Vaal outcomes are separate work. Stash/Shift
-  and the remaining refusal paths stay under automated coverage.
+  Annulment, all four Eldritch Ichors and all four Eldritch Embers, Enkindling and Instilling. Vaal turned normal
+  items rare (yellow) and the tooltip showed `Corrupted`; the Eater/Exarch implicit names, values and tiers were
+  visible. Enkindling and Instilling both appeared on one flask, repeated use replaced only its own type, and magic
+  explicit affixes stayed. No visual defects were found. Vaal on jewels remains outside the local rule; official
+  jewel/Vaal outcomes are separate work. Stash/Shift and the remaining refusal paths stay under automated coverage.
 - **Glassblower's Bauble (verified live, 2026-10-21):** +1% flask quality up to 20%; Scouring resets it.
   See [13](../docs/protocol/13-items.md), "Glassblower's Bauble".
 - **Fracturing Orb (verified live, 2026-10-21):** one random mod of a rare item with 4+ mods is fractured and kept by
@@ -254,5 +270,6 @@ Part of [Status](../Status.md); what to build next in this area is in
   currency other than Scroll of Wisdom, Chromatic Orb, Jeweller's Orb, Orb of Fusing, Orb of Alchemy, Chaos Orb,
   Divine Orb, Orb of Scouring, Orb of Transmutation, Orb of Alteration, Orb of Augmentation, Regal Orb, Exalted Orb,
   Orb of Annulment, Armourer's Scrap, Blacksmith's Whetstone, Orb of Chance, Vaal Orb, the four Eldritch Ichors and
-  Embers, Glassblower's Bauble, Fracturing Orb, Mirror of Kalandra, Gemcutter's Prism and Orb of Regret;
+  Embers, Enkindling Orb, Instilling Orb, Glassblower's Bauble, Fracturing Orb, Mirror of Kalandra, Gemcutter's Prism
+  and Orb of Regret;
   support gems and links ([13](../docs/protocol/13-items.md) "Open").

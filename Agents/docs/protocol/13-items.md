@@ -671,6 +671,42 @@ Exarch implicit and replaces every other implicit except Eater of Worlds ones, w
 admission.
 See [the Ichor comparison](../re/eldritch-ichor-coe.md) and [the Ember comparison](../re/eldritch-ember-coe.md).
 
+### Enkindling Orb and Instilling Orb (2026-10-30, verified live)
+
+`CurrencyEnkindlingOrb` and `CurrencyInstillingOrb`, same 0x71/0x72 handler. `CurrencyEffects.Enkindling` and
+`CurrencyEffects.Instilling` delegate to `ItemRolls.Enkindling` / `ItemRolls.Instilling`.
+
+Both are utility-flask currencies: the target must have the `utility_flask` tag (from `item-types.json`), any rarity,
+a known serializable base with Mods and not `Unmodifiable`; corrupted and mirrored items are refused. Life and mana
+flasks, non-flasks and unsupported targets are refused before spending.
+
+The chosen enchantment is a normal `ModSection.Enchant` entry. The item's explicit affixes, other implicits, quality,
+charges, rarity and name stay.
+
+Enkindling uses the five GenerationType 21 rows (Domain 1) with the game's spawn weights 250/100/100/100/100:
+
+- `FlaskEnchantmentSealIncreasedEffect_`: 60-70% increased effect
+- `FlaskEnchantmentSealIncreasedDuration`: 80-100% increased Duration
+- `FlaskEnchantmentSealIncreasedChargesGained`: 60-80% increased Charge Recovery
+- `FlaskEnchantmentSealReducedChargesUsed`: 25-35% reduced Charges per use
+- `FlaskEnchantmentSealMaximumCharges____`: +40-60 to Maximum Charges
+
+Every one also carries `Gains no Charges during Effect` (stat value 1).
+
+Instilling uses the fifteen spawnable GenerationType 22 rows (Domain 1), equal weight: adjacent flask used, reused at
+the end of the flask's effect, charges reach full, guard skill used, travel skill used, hit a rare/unique enemy,
+frozen, chilled, shocked, ignited, bleeding, poisoned, block, savage hit, life flask used. The sixteenth row,
+`FlaskEnchantmentInjectorOnGuardSkillExpired` (`Used when you lose a Guard Skill Buff`), has spawn weight 0 in
+3.29.3b and is excluded; the bench has fifteen matching recipes and excludes it too.
+
+Enkindling and Instilling are separate enchantments: each replaces only its own type and preserves the other. Both
+remove Harvest/bench flask enchantments (GenerationType 3, family `FlaskEnchantment`) and other enchant-list mods; a
+legacy Harvest item therefore loses that enchantment while keeping unrelated implicits. CoE's `flaskEnchant` removes
+both types, so its engine does not model the coexistence the client shows; the local replacement scope follows the
+game data, wiki, PoB and the native client. The pools, weights and target class come from CoE beta and the extracted
+tables. See [the Enkindling comparison](../re/enkindling-coe.md) and
+[the Instilling comparison](../re/instilling-coe.md).
+
 ### Orb of Fusing (2026-10-21, verified live)
 
 `CurrencyRerollSocketLinks`, HASH32 `0xC71BF58D`, uses the same 0x71/0x72 currency handler and 0xbf inventory update.
