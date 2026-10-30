@@ -81,13 +81,14 @@ partial class Program
         });
     }
 
-    static void CommitProjectileKill(ProjectileSession session, uint id, SpawnedMonster monster, long at, Random random)
+    static void CommitProjectileKill(ProjectileSession session, uint id, SpawnedMonster monster, long at, Random random,
+        bool playerKill = true)
     {
         var conn = session.Conn;
         var position = monster.Walk.Position(at / (double)ProjectileRuntime.QuantaPerSecond);
         // Match ordinary kills: corpses stay until area teardown, and impales retain their own expiry/hit state.
         if (HardcoreProgressBlocked(conn) || monster.Variety is not { } variety || !monster.Hostile) return;
-        ChargesOnKill(conn, monster);
+        if (playerKill) ChargesOnKill(conn, monster);
         if (conn.Layout.Id == TutorialObjects.Strand && variety.Id == TutorialObjects.Zombie
             && CharacterSaves.Load(CharacterName(conn))?.Tutorial is { ZombieKilled: false })
         {

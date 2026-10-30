@@ -222,6 +222,36 @@ partial class Program
             if (!Conn.Monsters.TryGetValue(contact.Target.Id, out var target) || target.Dead || target.Life == 0
                 || Key(contact.Target.Id, target) != contact.Target) return ProjectileHitResult.Miss;
             var random = contact.Projectile.RandomSource;
+            if (shot.RampageEpoch is long ownedEpoch)
+            {
+                if (!RampageEffectCurrent(Conn, ownedEpoch) || !target.Hostile || target.OwnerId is not null)
+                    return ProjectileHitResult.Miss;
+                if (!shot.Spell && !RampageAttackHits(target, shot.Accuracy, contact.At / (double)ProjectileRuntime.QuantaPerSecond, random))
+                    return ProjectileHitResult.Miss;
+                if (MonsterBlocks(target, random, shot.Spell)) return ProjectileHitResult.Blocked;
+                var raw = shot.Hit.Scale(contact.Multiplier).Roll(random);
+                bool crit = random.Next(10000) < shot.CriticalChance;
+                var (ownedDamage, _) = MonsterDamage(target, raw, crit, !shot.Spell, default);
+                if (crit) ownedDamage = DamageModel.CriticalDamage(ownedDamage, CriticalMultiplierOn(target, shot.CriticalMultiplier));
+                var ownedHit = ApplyMonsterHitLocked(Conn, target, ownedDamage);
+                if (ownedHit is null) return ProjectileHitResult.Miss;
+                if (ownedHit.Value.StageStarts) CommitProjectileBossStage(this, contact.Target.Id, target, contact.At);
+                var stun = RampageStatusLocked(Conn, contact.Target.Id, target, shot.RampageSkill,
+                    contact.At / (double)ProjectileRuntime.QuantaPerSecond);
+                Packet(InstanceProtocol.LifeUpdate(contact.Target.Id, ownedHit.Value.Life),
+                    $"Rampage projectile hit 0x{contact.Target.Id:x} for {ownedDamage}");
+                if (ownedHit.Value.Life == 0)
+                {
+                    CommitProjectileKill(this, contact.Target.Id, target, contact.At,
+                        contact.Projectile.RewardRandomSource, playerKill: false);
+                    if (shot.RampageSkill?.Get("explode_on_kill_%_fire_damage_to_deal") is int pct and > 0)
+                        Enqueue(() => RampageKillExplosion(remote, stream, ciphers, Conn, ownedEpoch,
+                            contact.Target.Id, target, pct));
+                }
+                else if (stun is not null)
+                    Enqueue(() => SendRampageStun(remote, stream, ciphers, Conn, stun));
+                return ProjectileHitResult.Hit;
+            }
             double at = contact.At / (double)ProjectileRuntime.QuantaPerSecond;
             int hitChance = 100;
             if (!shot.Spell)

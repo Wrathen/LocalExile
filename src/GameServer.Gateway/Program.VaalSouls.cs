@@ -5,7 +5,7 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    sealed record SoulTransfer(string Character, DateTime At, VaalSoulState.Carried State);
+    sealed record SoulTransfer(string Character, DateTime At, VaalSoulState.Carried State, double PreventionRemaining);
     static readonly ConcurrentDictionary<uint, SoulTransfer> CarriedVaalSouls = new();
 
     // Only the proved native getter inputs are projected. Explicit development values win, including zero.
@@ -47,6 +47,9 @@ partial class Program
                 var own = supported.Stats;
                 int required = VaalSoulCost.Required(definition.BaseCost,
                     name => VaalSoulInput(conn, player, own, name));
+                if (SkillsFor(conn).IsAttack(gem.Effect)
+                    && VaalSoulInput(conn, player, own, "vaal_attack_rage_cost_instead_of_souls_per_use") != 0)
+                    required = 0;
                 sources.Add((definition.ActiveSkillsRow, VaalSoulCost.Capacity(required, definition.StoredUses)));
             }
             conn.VaalSouls.Reconcile(sources);
@@ -131,7 +134,9 @@ partial class Program
             conn.VaalSoulsRetired = true;
             foreach (var (old, entry) in CarriedVaalSouls)
                 if (DateTime.UtcNow - entry.At > TimeSpan.FromMinutes(5)) CarriedVaalSouls.TryRemove(old, out _);
-            CarriedVaalSouls.TryAdd(ticket, new(CharacterName(conn), DateTime.UtcNow, state));
+            double prevention = Math.Max(0, conn.VaalPreventionUntil - VaalResourceTime(conn));
+            conn.VaalUse = null; conn.VaalPreventionUntil = 0;
+            CarriedVaalSouls.TryAdd(ticket, new(CharacterName(conn), DateTime.UtcNow, state, prevention));
         }
     }
 
@@ -143,7 +148,10 @@ partial class Program
                 || entry.Character != CharacterName(conn)) return;
             if (!CarriedVaalSouls.TryRemove(new KeyValuePair<uint, SoulTransfer>(conn.Ticket, entry))) return;
             if (DateTime.UtcNow - entry.At <= TimeSpan.FromMinutes(5) && conn.PlayerLife > 0)
+            {
                 conn.VaalSouls.Restore(entry.State);
+                conn.VaalPreventionUntil = VaalResourceTime(conn) + entry.PreventionRemaining;
+            }
         }
     }
 }

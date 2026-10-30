@@ -343,7 +343,8 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Its eighteen original-head controls remain historical; fresh ordered joint controls pass at `c9cd1864`.
   Native cap/order uses one raw40 contact; four-contact timing and forced full-writer races remain automated coverage.
   See [the model](../docs/game/steel-willed-armour.md) for event policies and evidence boundaries.
-  Partial armour percentages, other Behemoth nodes, class admission and suppression transfer remain separate.
+  Partial armour percentages and suppression transfer remain separate.
+  Behemoth's selected-class nodes and verified-graph admission are accepted in the whole-class audit.
   Fresh composed default-attack mana, penetration and critical-ignore checks pass at source `1366f48`.
   Verify the remaining supported-gem, modifier and bow combinations natively; retain their automated regressions.
   Unconditional penetration is integrated with base/mod resistance, fractional totals and target damage taken.
@@ -419,7 +420,7 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Recheck charge, equipment and command refreshes queued across expiry and separate decay-speed modifiers.
   The 140-damage/11-Fortification composition has automated accepted-contact coverage; verify it natively.
   Measure official capped-attempt refresh behavior and area-loading timer parity before replacing policy v1.
-  See [26-rage.md](../docs/protocol/26-rage.md); Vaal costs and whole-class selection remain separate mechanics.
+  See [26-rage.md](../docs/protocol/26-rage.md); Behemoth's Vaal costs and selection are accepted separately.
 
 ### Vaal execution and remaining soul checks
 
@@ -432,8 +433,11 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Verify held death notifications, Vaal Haste/Grace aura costs, death/resurrection and slow destination loading.
   Include attribute gear removal before inventory notifications; current automated coverage is not native proof.
   See [27-vaal-souls.md](../docs/protocol/27-vaal-souls.md) and Status for the explicit LocalExile policies.
-  Vaal executors, payment, official distribution/capacity parity and the SGP countdown require separate work.
-  Unsupported Vaal casts remain refused; Behemoth and whole-class enablement remain separate.
+  Vaal Ground Slam, Rage payment and its SGP countdown are implemented for Behemoth.
+  Historical selected-class acceptance is at `9657e0ad`; the candidate over `c748f5fa` has automated checks only.
+  See the [class audit](../docs/game/phrecia-class-completion.md) for scope and current integration boundaries.
+  Other executors, official distribution/capacity parity and fresh whole-class native acceptance remain open.
+  Unsupported Vaal casts remain refused before action and payment.
 
 ### Death screen variants
 

@@ -5,7 +5,9 @@ Implementation source `66571d55d5d5bd70f9e7b631849f77fbe862ddbe` is based on mai
 Automated wire/dispatcher tests and 42 bounded real-client collection/counter checks pass.
 This establishes the collection/counter scope, not full Vaal execution or lifecycle parity.
 Unsupported Vaal casts are refused before action echoes, including full budgets and effective zero cost.
-There is no Vaal executor, Rage payment, invented soul-gain-prevention timer or Phrecia gate change.
+The collection slice itself adds no executor, Rage payment, prevention timer or Phrecia gate change.
+Behemoth's separate [class extension](../game/phrecia-class-completion.md) adds paid Vaal Ground Slam and a
+pausable prevention countdown; other Vaal executors remain refused.
 
 ## Primary evidence
 
