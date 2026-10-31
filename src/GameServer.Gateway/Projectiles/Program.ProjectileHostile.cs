@@ -56,7 +56,7 @@ partial class Program
             // A lobbed shot's range is its landing distance; a straight one flies on past the aim.
             Range = projectile.Lobbed ? landing : Math.Max(distance, a.Range) * 1.5 + 5,
             DirectDamage = !projectile.Lobbed,
-            EndArea = projectile.Lobbed ? new ProjectileAreaRecipe("monster mortar", MonsterMortarRadius()) : null,
+            EndArea = projectile.Lobbed ? new ProjectileAreaRecipe("monster mortar", projectile.AreaRadius > 0 ? projectile.AreaRadius : MonsterMortarRadius()) : null,
             EndAreaReasons = projectile.Lobbed
                 ? new HashSet<ProjectileEndReason> { ProjectileEndReason.Landing, ProjectileEndReason.Terrain } : null,
         };

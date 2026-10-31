@@ -150,6 +150,44 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
         (int)Math.Floor(GoldAmount(monsterLevel, rarity, rng) * Math.Max(0, multiplier)) is int amount and > 0 && catalog.Find(GoldId) is { Supported: true } type
             ? new Drop(ItemCatalog.Create(type) with { StackSize = (ushort)Math.Min(amount, ushort.MaxValue) }, type) : null;
 
+    /// <summary>The King in the Mists' four guaranteed uniques, by the wiki's crowdsourced 3.26 shares (n=576). They are
+    /// absolute weights in one pick, so the sum is the distribution and the boss always drops exactly one of them.</summary>
+    public static readonly IReadOnlyList<(string Name, double Weight)> KingInMistsUniques =
+    [
+        ("The Untouched Soul", 40), ("Pragmatism", 35), ("The Light of Meaning", 20), ("The Burden of Shadows", 5),
+    ];
+
+    /// <summary>The boss-only gem drops (wiki 3.28: Hextoad 6%, Hexpass 10%) and the drop-restricted card.</summary>
+    public static readonly IReadOnlyList<(string Id, double Chance)> KingInMistsExtras =
+    [
+        ("Metadata/Items/Gems/SupportGemHextoad", 0.06),
+        ("Metadata/Items/Gems/SupportGemHexpass", 0.10),
+        ("Metadata/Items/DivinationCards/DivinationCardTheEndlessDarkness", 0.15),
+    ];
+
+    /// <summary>The King in the Mists' guaranteed unique, then its support gems and card. Corpse items (the 50% roll)
+    /// are not modelled yet: the item system has no itemised-corpse consumer.</summary>
+    public IReadOnlyList<Drop> KingInMists(int level, Random rng)
+    {
+        var drops = new List<Drop>();
+        if (uniques is not null && KingInMistsUniques.Sum(u => u.Weight) is > 0 and var total)
+        {
+            double pick = rng.NextDouble() * total;
+            var chosen = KingInMistsUniques[^1].Name;
+            foreach (var (name, weight) in KingInMistsUniques)
+            {
+                if (pick < weight) { chosen = name; break; }
+                pick -= weight;
+            }
+            if (uniques.Create(chosen, rng) is { } item && catalog.ByHash(item.TypeHash) is { } type)
+                drops.Add(new(item with { ItemLevel = (byte)Math.Clamp(level, 1, 100), Identified = false }, type));
+        }
+        foreach (var (id, chance) in KingInMistsExtras)
+            if (rng.NextDouble() < chance && catalog.Find(id) is { Supported: true } type)
+                drops.Add(new(ItemCatalog.Create(type) with { ItemLevel = (byte)Math.Clamp(level, 1, 100) }, type));
+        return drops;
+    }
+
     /// <summary>An approximate generic-map drop: a map of the current map tier (or tier 1 in the campaign). Our own
     /// rates until the game pools are known.</summary>
     public Drop? Map(int monsterLevel, MonsterRarity monster, int mapTier, Random rng)

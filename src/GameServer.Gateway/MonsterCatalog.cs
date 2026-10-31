@@ -35,6 +35,7 @@ sealed class MonsterCatalog(string folder = "data")
 
     private readonly Lazy<(List<Variety> Rows, string? Error)> _rows = new(() => Load(folder));
     private readonly Lazy<LifeTables?> _life = new(() => LifeTables.Load(folder));
+    private readonly Lazy<MapBossScalingTable?> _mapBoss = new(() => MapBossScalingTable.Load(folder));
     private readonly MonsterResistanceCatalog _resistance = new(folder);
     private readonly Lazy<Dictionary<string, HitAnimation[]>> _takeHit = new(() => LoadTakeHit(folder));
 
@@ -165,6 +166,41 @@ sealed class MonsterCatalog(string folder = "data")
     /// The character panel's "Chance to Hit Evasive Monsters" row uses it.</summary>
     public int? BaseEvasiveEvasion(int level) =>
         _life.Value is { } t && level >= 1 && level <= t.Levels.Count ? t.Levels[level - 1].EvasiveEvasion : null;
+
+    /// <summary>
+    /// The life and damage a unique map boss has more than its base life and hit at this map level: MonsterMapBossDifficulty
+    /// <c>BossLifePercentIncrease</c>/<c>BossDamagePercentIncrease</c> plus MonsterMapDifficulty
+    /// <c>LifePercentIncrease</c>/<c>DamagePercentIncrease</c>, added as percentages (level 83: 1 + 18.64 + 1.09 = 20.73
+    /// life). Poedb's level-83 King in the Mists life (45,614,731) is this multiplier over 15,319 x 18 x 7.98.
+    /// </summary>
+    public (double Life, double Damage) MapBossScaling(int level) =>
+        _mapBoss.Value is { } s && level >= 1 && level < s.BossLife.Length
+            ? (1 + (s.BossLife[level] + s.MapLife[level]) / 100.0,
+               1 + (s.BossDamage[level] + s.MapDamage[level]) / 100.0)
+            : (1, 1);
+
+    private sealed record MapBossScalingTable(double[] BossLife, double[] BossDamage, double[] MapLife, double[] MapDamage)
+    {
+        public static MapBossScalingTable? Load(string folder)
+        {
+            string boss = Path.Combine(folder, "tables", "MonsterMapBossDifficulty.json"),
+                map = Path.Combine(folder, "tables", "MonsterMapDifficulty.json");
+            if (!File.Exists(boss) || !File.Exists(map)) return null;
+            using var b = JsonDocument.Parse(File.ReadAllBytes(boss));
+            using var m = JsonDocument.Parse(File.ReadAllBytes(map));
+            var bossRows = b.RootElement.EnumerateArray()
+                .Select(r => (Level: r.GetProperty("MapLevel").GetInt32(), Life: r.GetProperty("BossLifePercentIncrease").GetDouble(),
+                    Damage: r.GetProperty("BossDamagePercentIncrease").GetDouble())).ToArray();
+            var mapRows = m.RootElement.EnumerateArray()
+                .Select(r => (Level: r.GetProperty("MapLevel").GetInt32(), Life: r.GetProperty("LifePercentIncrease").GetDouble(),
+                    Damage: r.GetProperty("DamagePercentIncrease").GetDouble())).ToArray();
+            int size = Math.Max(bossRows.Max(r => r.Level), mapRows.Max(r => r.Level)) + 1;
+            var result = new MapBossScalingTable(new double[size], new double[size], new double[size], new double[size]);
+            foreach (var r in bossRows) if (r.Level >= 0 && r.Level < size) { result.BossLife[r.Level] = r.Life; result.BossDamage[r.Level] = r.Damage; }
+            foreach (var r in mapRows) if (r.Level >= 0 && r.Level < size) { result.MapLife[r.Level] = r.Life; result.MapDamage[r.Level] = r.Damage; }
+            return result;
+        }
+    }
 
     private sealed record LifeTables(List<(int MonsterLife, int MinionLife, int AltLife1, int AltLife2, double Damage,
         int Experience, int Accuracy, int Evasion, int EvasiveEvasion)> Levels,

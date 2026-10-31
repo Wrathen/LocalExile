@@ -51,6 +51,7 @@ bench.
   Save/reentry persistence and collision escape for all supported NPC types have automated coverage.
 - **Start:** create the decorations (`HideoutObject`, each type's components from data/object-types.json);
   the Edit mode's placement/removal and appearance messages;
-  maps: the arrival point, a return portal, fragments and device recipes and map mods.
+  maps: the arrival point, a return portal, device recipes and map mods; `An Audience With The King` already opens the
+  Crux (fragments otherwise remain inert).
   Personal template selection and login to the selected home are implemented (see Status).
 - **Done when:** the hideout looks like the real one, can be edited and saved, and maps can be run from its device.

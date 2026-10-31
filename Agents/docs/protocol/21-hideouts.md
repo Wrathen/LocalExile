@@ -156,7 +156,8 @@ u8 (0 seen); the writer class is `0x1435bff20`, as C→S 0xc7. Mode 0x5e (anothe
 The server checks the slots itself (`MapDevice.Check`): only maps and map fragments, and exactly one map. Otherwise
 nothing is consumed and a chat line (S→C 0x17) gives the reason. Then the slots are emptied (0xbf), the map's area
 opens (Maps.dat `BaseItemTypesKey` → `Regular_WorldAreasKey`), and six portals appear on a ring of 16 cells around
-the device. Fragments are consumed with the map but add nothing yet.
+the device. Fragments are consumed with the map; `An Audience With The King` (`Metadata/Items/MapFragments/RitualBossFragment`)
+may also be used alone, opening the Crux of Nothingness.
 
 Generic 3.29 maps use the **MapKey** component (read `0x1424ae7c0`: u8 flags, then optional u32/u16/u8; zero is enough
 because `MapKeyTierN` names the tier). `/item Map (Tier 5)` makes one. `MapKeys.dat` supplies its tier and the map opens
@@ -254,7 +255,7 @@ Selection is implemented as described below.
   component list; `HideoutObject` writes the supported ones.
 - Editing: the Edit button shows; moving, placing and saving doodads (the client's messages) are not served.
 - The map device: the arrival in a map without a walk map (the player can stand in the sea; `live.ps1 -Walkmaps` per
-  map), the telepads' exact cells, fragments and device recipes (MapDeviceRecipes), the map's mods and area level, the map
+  map), the telepads' exact cells, device recipes (MapDeviceRecipes), the map's mods and area level, the map
   device type (3) portal's own model and "Map Portal" text (needs its open transition, which crashed), the window's
   u16 target and the 0x008f fields left at 0.
 - Resurrect in a map → the hideout.

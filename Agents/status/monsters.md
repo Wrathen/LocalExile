@@ -28,6 +28,11 @@ Part of [Status](../Status.md); what to build next in this area is in
   `CampaignBossPlacementTests` (`Game_BOSS_CHECK=1`) checks every boss of the act 1–10 areas the Gateway generates.
   Code: `MonsterPacks.cs`, Gateway (`PopulateArea`), `scripts/walkmaps`, `scripts/re/atlas room-points`.
   Docs: [14](../docs/protocol/14-monster-packs.md).
+- Unique map bosses get the map tables' life and damage increases: `MonsterMapBossDifficulty` plus
+  `MonsterMapDifficulty`, added as percentages (level 83: ×20.73 life, ×1.15 damage). The King in the Mists' humanoid
+  form therefore has 45,614,731 life at level 83, matching poedb's display.
+  Code: `MonsterCatalog.MapBossScaling`, `SpawnMonster`.
+  Docs: [king-in-the-mists](../docs/game/king-in-the-mists.md).
 - Emerge monsters (Gravel Eaters, Dripping Dead, the Twilight Strand's Drowned …) are created buried, cannot be hit
   while buried, and rise when the player comes within 24 cells: the client plays their emerge clip (Emerge action
   0x0101, then Transitionable 2), and they fight, die and give experience like other monsters.
@@ -98,6 +103,16 @@ Part of [Status](../Status.md); what to build next in this area is in
 
 ## Partly working
 
+- The King in the Mists' Crux of Nothingness encounter: `An Audience With The King` alone opens the area in the map
+  device; the humanoid form fights with the default attack, spell projectile, Vine Slam and Vine Cascade, teleports to
+  three Mystic Fetishes (Portent Vapors stacks) and summons Plagued Rats; after the third fetish it becomes the treant
+  (`VoodooKingBoss3`, about 26.6M life) with Treant Slam, Bug Bomb, Bugrend and effigies. The kill rolls the guaranteed
+  unique, Hextoad/Hexpass and The Endless Darkness.
+  Not yet: the separate maze layout, ground hazards, Ritual of Dance/Meditation imprisonment, monster energy shield,
+  Shadow Surge/Mystic Miasma damage over time, corpse items, the Unlight Altar/Bloodline and the native animation
+  capture.
+  Code: `KingInMists.cs`, `ItemDrops.KingInMists`, `MapDevice`.
+  Docs: [king-in-the-mists](../docs/game/king-in-the-mists.md).
 - Inherited Life corpse eligibility and sinking flags flow from object-types manifest v4 through `MonsterCatalog`
   into ordinary monster creation.
   The combined object-types format retains the stationary collision footprints and models alongside Life data.

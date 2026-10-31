@@ -173,6 +173,9 @@ boss pack stood once per area, a second one stood at `mapboss`).
 ## 4. Open
 
 - Pack density and magic/rare chances are guesses (§1); so are the mod counts (§5).
+- Unique map bosses get `MonsterMapBossDifficulty` plus `MonsterMapDifficulty` life and damage percentages
+  (`MonsterCatalog.MapBossScaling`; level 83 is ×20.73 life and ×1.15 damage). The area level is the map level here; a
+  future map-affix system may add more.
 - `Grounds` (Drowned on wet beach) is not checked; we have no ground-type grid.
 - Emerge packs (Gravel Eaters, Dripping Dead, the Strand's Drowned, Tide Striders …) are placed waiting and rise within
   24 cells of the player ([10](10-chat-and-commands.md) §5); the distance is ours (the official one is in the server's

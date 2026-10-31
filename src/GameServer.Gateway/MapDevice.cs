@@ -24,11 +24,14 @@ sealed class MapDevice
     }
 
     private readonly Dictionary<uint, MapArea> _byItemType;
+    private readonly Dictionary<uint, MapArea> _byFragment;
     private readonly AtlasCatalog? _atlas;
 
-    public MapDevice(IReadOnlyDictionary<uint, MapArea> byItemType, AtlasCatalog? atlas = null)
+    public MapDevice(IReadOnlyDictionary<uint, MapArea> byItemType, AtlasCatalog? atlas = null,
+        IReadOnlyDictionary<uint, MapArea>? byFragment = null)
     {
         _byItemType = new(byItemType);
+        _byFragment = byFragment is null ? [] : new(byFragment);
         _atlas = atlas;
     }
 
@@ -37,6 +40,7 @@ sealed class MapDevice
     public static MapDevice Load(string folder, Func<int, uint?> hashOfRow, ItemCatalog? catalog = null)
     {
         var byType = new Dictionary<uint, MapArea>();
+        var byFragment = new Dictionary<uint, MapArea>();
         string maps = Path.Combine(folder, "tables", "Maps.json"), areas = Path.Combine(folder, "tables", "WorldAreas.json");
         if (File.Exists(maps) && File.Exists(areas))
         {
@@ -55,8 +59,22 @@ sealed class MapDevice
                     Level = wa.GetProperty("AreaLevel").GetInt32(),
                 });
             }
+            // A map fragment may open an area by itself: An Audience With The King opens the Crux of Nothingness.
+            // The fragment's BaseItemTypes row is the map-device slot's type hash, not a Maps.dat row.
+            if (catalog?.Find("Metadata/Items/MapFragments/RitualBossFragment") is { } fragment)
+                for (int i = 0; i < areaCount; i++)
+                    if (a.RootElement[i].GetProperty("Id").GetString() == "AzmeriLeagueBoss")
+                    {
+                        var wa = a.RootElement[i];
+                        byFragment[fragment.Hash] = new MapArea((ushort)wa.GetProperty("HASH16").GetInt32(),
+                            wa.GetProperty("Id").GetString() ?? "", wa.GetProperty("Name").GetString() ?? "", 0)
+                        {
+                            Level = wa.GetProperty("AreaLevel").GetInt32(),
+                        };
+                        break;
+                    }
         }
-        return new MapDevice(byType, catalog is null ? null : new AtlasCatalog(catalog, folder));
+        return new MapDevice(byType, catalog is null ? null : new AtlasCatalog(catalog, folder), byFragment);
     }
 
     public AtlasCatalog? Atlas => _atlas;
@@ -65,9 +83,12 @@ sealed class MapDevice
 
     public MapArea? AreaOf(uint itemType) => _byItemType.GetValueOrDefault(itemType);
 
+    /// <summary>The area a fragment opens by itself, or null (An Audience With The King opens Crux of Nothingness).</summary>
+    public MapArea? AreaOfFragment(uint itemType) => _byFragment.GetValueOrDefault(itemType);
+
     /// <summary>Whether a map opens this area (WorldAreas HASH16): it gets a portal back to the hideout.</summary>
     public bool IsMapArea(ushort hash16) => _byItemType.Values.Any(a => a.Hash16 == hash16) ||
-        _atlas?.Layouts.Any(l => l.Hash16 == hash16) == true;
+        _byFragment.Values.Any(a => a.Hash16 == hash16) || _atlas?.Layouts.Any(l => l.Hash16 == hash16) == true;
 
     /// <summary>One item in the slots: its type hash and ItemClasses Id.</summary>
     public readonly record struct Slot(uint TypeHash, string Class, string Name);
@@ -87,7 +108,14 @@ sealed class MapDevice
             return null;
         }
         var maps = slots.Where(s => s.Class is MapClass or MapKeyClass).ToList();
-        if (maps.Count == 0) { why = "Put a map into the Map Device first."; return null; }
+        if (maps.Count == 0)
+        {
+            // A fragment alone may open its area (An Audience With The King).
+            var fragments = slots.Where(s => s.Class == FragmentClass).ToList();
+            if (fragments.Count == 1 && AreaOfFragment(fragments[0].TypeHash) is { } fragmentArea) return fragmentArea;
+            why = "Put a map into the Map Device first.";
+            return null;
+        }
         if (maps.Count > 1) { why = "Only one map can be activated at a time."; return null; }
         if (AreaOf(maps[0].TypeHash) is { } area) return area;
         if (_atlas?.TierOf(maps[0].TypeHash) is int tier)

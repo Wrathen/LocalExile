@@ -1118,8 +1118,9 @@ partial class Program
     // (BossFights; the stage is then taken, so it runs once).
     internal static (uint Life, bool StageStarts) TakeDamageLocked(SpawnedMonster m, int damage)
     {
-        // While the stage runs the boss cannot die: its life fills up at the end anyway.
-        if (m.StageRunning) return ((uint)Math.Max(1, (long)m.Life - damage), false);
+        // While the stage runs the boss cannot die: its life fills up at the end anyway. The humanoid King also waits for
+        // its three Mystic Fetishes before the treant form takes over; a burst cannot skip the phase.
+        if (m.StageRunning || m.KingPhaseLocked) return ((uint)Math.Max(1, (long)m.Life - damage), false);
         var (life, starts) = BossFights.Damage(m.Life, m.MaxLife, damage, m.StageTaken ? null : m.Stage);
         if (starts)
         {
@@ -1153,7 +1154,7 @@ partial class Program
 
     // A boss whose variety has the big life bar (MonsterVarieties BossHealthBar) shows it at the top of the screen once it
     // aggroes: its StateMachine's boss_life_bar (Metadata/Monsters/BossLifeBar.ot) and aggro (Hillock's aggro effect) go to 1.
-    static async Task ShowBossLifeBar(string remote, NetworkStream stream, ConnectionCiphers ciphers, uint id, SpawnedMonster m, ClientState conn)
+    internal static async Task ShowBossLifeBar(string remote, NetworkStream stream, ConnectionCiphers ciphers, uint id, SpawnedMonster m, ClientState conn)
     {
         if (m.Variety is not { } v || m.States is not { } states) return;
         int index = v.ComponentsOrBase.ToList().IndexOf("StateMachine");
@@ -1216,6 +1217,10 @@ partial class Program
         // The mods' changes (Program.Mods.cs): their multipliers on top of the league's, their own items besides.
         var modded = ServerMods.Drops(PlayerOf(conn), ModMonster(m, at));
         List<ItemDrops.Drop> drops = [];
+        // The King in the Mists always drops one of four uniques, plus its support gems and card. Its humanoid form is
+        // removed without a death, so only the treant (Boss3) reaches here.
+        if (KingInMists.IsBoss3(m.Variety))
+            drops.AddRange(DropsFor(conn).KingInMists(m.Level, Random.Shared));
         if (modded is not { Cancel: true })
         {
             drops.AddRange(DropsFor(conn).Roll(m.Level, m.Rarity, Random.Shared, IncreasedItemRarity(conn),
