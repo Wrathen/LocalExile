@@ -133,22 +133,22 @@ static class ItemMoves
         return new(changed, payments);
     });
 
-    public sealed record HarvestResult(InventoryItem Changed, IReadOnlyList<Price> Payments);
+    public sealed record SlotCraft(InventoryItem Changed, IReadOnlyList<Price> Payments);
 
-    /// <summary>The item in the Horticrafting Station slot and every lifeforce cost commit together.</summary>
-    public static HarvestResult? HarvestAtStation(PlayerInventories items, AccountStash stash, HarvestCrafting harvest,
-        ushort recipe, Random random) => Saves.Atomically<HarvestResult?>(() =>
+    /// <summary>The one item in a slot row and every cost commit together.</summary>
+    public static SlotCraft? CraftInSlot(PlayerInventories items, AccountStash stash, byte row,
+        Func<Item, GameServer.Modding.CraftResult?> craftIt) => Saves.Atomically<SlotCraft?>(() =>
     {
-        var targets = items.Items(PlayerInventories.HarvestCrafting);
-        if (targets.Count != 1 || harvest.Apply(recipe, targets[0].Item, random) is not { } craft) return null;
+        var targets = items.Items(row);
+        if (targets.Count != 1 || craftIt(targets[0].Item) is not { } craft) return null;
         foreach (var (currency, amount) in craft.Costs)
             if (amount < 0 || (long)items.Count(Main, currency) + stash.CountOf(currency) < amount) return null;
         var payments = new List<Price>();
         foreach (var (currency, amount) in craft.Costs)
             if (amount > 0) payments.Add(Pay(items, stash, currency, amount)
-                ?? throw new InvalidOperationException("Harvest payment changed after validation"));
-        var changed = items.Change(PlayerInventories.HarvestCrafting, targets[0].Id, _ => craft.Item)
-            ?? throw new InvalidOperationException("Harvest item disappeared after payment");
+                ?? throw new InvalidOperationException("Craft payment changed after validation"));
+        var changed = items.Change(row, targets[0].Id, _ => craft.Item)
+            ?? throw new InvalidOperationException("Crafted item disappeared after payment");
         return new(changed, payments);
     });
 

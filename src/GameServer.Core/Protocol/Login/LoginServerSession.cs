@@ -23,7 +23,7 @@ public sealed class LoginServerSession(AccountService accounts)
 
     /// <summary>The leagues sent in 0x1b after login: the create screen offers them (with none its Create button stays
     /// disabled).</summary>
-    public LeagueCatalog Leagues { get; init; } = LeagueCatalog.Default;
+    public LeagueCatalog Leagues { get; init; } = LeagueCatalog.Startup;
 
     public Session? Session { get; private set; }
     public Account? Account { get; private set; }
@@ -40,7 +40,7 @@ public sealed class LoginServerSession(AccountService accounts)
         CreateCharacter m => Create(m),
         // Delete on the character screen, after its confirmation (0x140cfafa0): the character's name and a byte (0 live).
         WStringU8Message { MessageId: DeleteCharacterId } m => Delete(m.Text),
-        // "Leagues with progress" (0x140d166a0): the leagues a character could migrate progress from. None here; the
+        // "Leagues with progress" (0x140d166a0): the leagues a character could migrate progress from. None yet; the
         // client then shows "There are no available leagues to migrate progress from."
         EmptyMessage { MessageId: 0x19 } => Session is null ? [] : [new LeaguesWithProgress(0, [])],
         _ => [],
@@ -67,7 +67,8 @@ public sealed class LoginServerSession(AccountService accounts)
         if (characters.Count == 0) return [];
         // The u32 is probably the character's index on the character screen (0 for the first, the only one tested).
         var chosen = characters[(int)Math.Min(play.Value, (uint)characters.Count - 1)];
-        if (!HardcoreDeathRules.CanEnter(chosen))
+        // Void characters are listed and cannot be entered, nor can those of a league that has ended or is not loaded.
+        if (!HardcoreDeathRules.CanEnter(chosen) || !Leagues.CanEnter(chosen.League))
             return [CharacterList(), new U16Message(0x0f, ResultLeagueDoesNotExist)];
         // Last played now: the character screen selects it next time (CharacterList's B28).
         accounts.Touch(Session.AccountId, chosen.Id, chosen.AreaId);
@@ -249,6 +250,6 @@ public sealed class LoginServerSession(AccountService accounts)
         Session is null ? [] :
         [.. accounts.Characters(Session.AccountId).Select(c =>
             // U46 (+0x46) is the portrait variation the character screen draws (0x14082e210 → 0x142426b00).
-            new ListEntry15(c.Name, c.League, (byte)(c.HardcoreDeath?.PermanentlyDead == true ? 1 : 0), 0,
+            new ListEntry15(c.Name, c.League, (byte)(c.HardcoreDeath?.PermanentlyDead == true || !HardcoreDeathRules.CanEnter(c) || !Leagues.CanEnter(c.League) ? 1 : 0), 0,
                 (byte)Math.Clamp(c.Level, 0, 255), 0, (byte)c.Class, 0, c.Portrait, 0, 0))];
 }

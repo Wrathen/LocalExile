@@ -10,7 +10,7 @@ partial class Program
     // C→S 0x134: the client joins a global or trade channel after entering an area and for /global N and /trade N, and
     // prints "Timeout while joining … chat channel" when no 0x135 comes within 5 s. The join is answered with 0x135, then
     // a chat line naming the channel when it is new for the character or was asked for by a command.
-    static async Task JoinChatChannel(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task JoinChatChannel(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceChat.JoinChannelRequest join)
     {
         var (channel, changed) = Channels.Join(CharacterName(conn), join.Kind, join.Channel, join.Language);
@@ -26,7 +26,7 @@ partial class Program
 
     // Every area: the channels the character joined earlier in the session (S→C 0x135), since the new instance connection
     // starts without any and the client asks only once per session.
-    static async Task SendChatChannels(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task SendChatChannels(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         foreach (var (kind, channel, language) in Channels.Current(CharacterName(conn)))
             await Send(remote, stream, ciphers, InstanceChat.ChannelJoined(kind, channel, language), $"0x0135 still on {kind} chat channel {channel}");
@@ -34,7 +34,7 @@ partial class Program
 
     // C→S 0x15 without a slash: the player's own line comes back as a chat line from the character, on the channel it was
     // typed in (local, '#' global, '$' trade), as it would from a server relaying it to the channel.
-    static async Task EchoChat(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string typed)
+    internal static async Task EchoChat(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string typed)
     {
         if (ChatChannels.Echo(CharacterName(conn), typed) is { } line)
             await Send(remote, stream, ciphers, line, $"0x0017 chat line from {CharacterName(conn)}");

@@ -14,17 +14,17 @@ public sealed class RuthlessVitalsSessionTests
         var old = f.Admit();
         var current = f.Admit();
         Set(current, 10, 7);
-        Program.PersistRuthlessVitals(current);
+        Program.PersistVitals(current);
         Set(old, 80, 50);
         old.Closed = true; // The normal disconnect path saves after marking its connection closed.
 
-        Program.PersistRuthlessVitals(old);
-        Program.ForgetRuthlessVitalsAdmission(old);
+        Program.PersistVitals(old);
+        Program.ForgetVitalsAdmission(old);
 
         f.AssertPools(10, 7);
-        Assert.Equal(current.RuthlessVitalsSessionId, f.Saved.VitalsOwner!.SessionId);
+        Assert.Equal(current.VitalsSessionId, f.Saved.VitalsOwner!.SessionId);
         Set(current, 9, 6);
-        Program.PersistRuthlessVitals(current);
+        Program.PersistVitals(current);
         f.AssertPools(9, 6);
     }
 
@@ -58,7 +58,7 @@ public sealed class RuthlessVitalsSessionTests
         {
             var conn = new ClientState(new(ushort.MaxValue, "VitalsSession", 128, 128, 32, 32, null, []), 0, 1)
             {
-                Character = Name, CharacterId = Id, ClassRow = 1, League = "Ruthless", Ruthless = true,
+                Character = Name, CharacterId = Id, ClassRow = 1, League = "Ruthless", LeagueForm = "ruthless",
                 Pools = new(10, 100, 80, 0, 0), PlayerLife = 100, PlayerMana = 80,
             };
             connections.Add(conn);
@@ -68,7 +68,7 @@ public sealed class RuthlessVitalsSessionTests
         public ClientState Admit()
         {
             var conn = Connection();
-            Program.RegisterRuthlessVitalsAdmission(conn);
+            Program.RegisterVitalsAdmission(conn);
             Program.InitializeCharacterVitals(conn);
             return conn;
         }
@@ -77,7 +77,7 @@ public sealed class RuthlessVitalsSessionTests
 
         public void Dispose()
         {
-            foreach (var conn in connections) Program.ForgetRuthlessVitalsAdmission(conn);
+            foreach (var conn in connections) Program.ForgetVitalsAdmission(conn);
             PlayerInventories.Forget(Name);
             Store.DeleteCharacter(Id);
         }

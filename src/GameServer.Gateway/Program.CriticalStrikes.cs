@@ -1,9 +1,9 @@
 partial class Program
 {
-    static bool IsCriticalProhibition(string name) => name is "global_cannot_crit"
+    internal static bool IsCriticalProhibition(string name) => name is "global_cannot_crit"
         or "virtual_global_cannot_crit" or "cannot_critical_strike_with_attacks";
 
-    static (bool LowLife, bool Focused, int ExtraRolls) CriticalContext(ClientState conn)
+    internal static (bool LowLife, bool Focused, int ExtraRolls) CriticalContext(ClientState conn)
     {
         var player = CharacterPlayerStats(conn);
         bool focused = Stats.Key("has_focus") is uint key && player.GetValueOrDefault(key) != 0;
@@ -29,7 +29,7 @@ partial class Program
             return CriticalExtraRollsFor(conn, CharacterPlayerStats(conn), own);
     }
 
-    static int CriticalExtraRollsFor(ClientState conn, IReadOnlyDictionary<uint, int> player,
+    internal static int CriticalExtraRollsFor(ClientState conn, IReadOnlyDictionary<uint, int> player,
         IReadOnlyDictionary<uint, int>? own = null)
     {
         int Player(string name) => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0;
@@ -44,7 +44,7 @@ partial class Program
     internal static bool CriticalProhibited(ClientState conn, bool attack, IReadOnlyDictionary<uint, int>? own = null)
         => CriticalProhibitedBy(CharacterPlayerStats(conn), attack, own);
 
-    static bool CriticalProhibitedBy(IReadOnlyDictionary<uint, int> player, bool attack,
+    internal static bool CriticalProhibitedBy(IReadOnlyDictionary<uint, int> player, bool attack,
         IReadOnlyDictionary<uint, int>? own)
     {
         bool Flag(string name) => Stats.Key(name) is uint key
@@ -68,7 +68,7 @@ partial class Program
         }
     }
 
-    static SkillCriticalRoll CaptureSkillCriticalRoll(ClientState conn, ushort skillId)
+    internal static SkillCriticalRoll CaptureSkillCriticalRoll(ClientState conn, ushort skillId)
     {
         lock (conn.Monsters)
         {

@@ -1,0 +1,8 @@
+{
+  "name": "Allflame",
+  "parent": "Standard",
+  "base": "Allflame",
+  "hardcore": false,
+  "ssf": false,
+  "description": "Plunder sunken treasures and harness the power of the Allflame."
+}

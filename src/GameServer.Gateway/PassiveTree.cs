@@ -11,7 +11,7 @@ using System.Text.Json;
 /// Gold respec (Bestel's Respecialisation): a node costs VillageBalancePerLevelShared.dat's GoldRespecCost at the
 /// character's level times the node's multiplier, as the client's per-node cost 0x141efb140 computes it.
 /// </summary>
-sealed class PassiveTree(string folder = "data", bool ruthless = false)
+sealed class PassiveTree(string folder = "data", bool hardMode = false)
 {
     public sealed record Node(ushort GraphId, string Id, string Name, IReadOnlyList<(uint Key, int Value)> Stats, int PointsGranted,
         bool IsAscendancy, bool IsStart, int MasteryGroup, int RespecMultiplier = 1, bool IsKeystone = false,
@@ -22,10 +22,10 @@ sealed class PassiveTree(string folder = "data", bool ruthless = false)
 
     public sealed record MasteryEffect(int Row, ushort Hash, string Id, IReadOnlyList<(uint Key, int Value)> Stats);
 
-    private readonly Lazy<Dictionary<ushort, Node>> _nodes = new(() => LoadNodes(folder, ruthless));
+    private readonly Lazy<Dictionary<ushort, Node>> _nodes = new(() => LoadNodes(folder, hardMode));
     private readonly Lazy<Dictionary<int, ushort>> _rows = new(() => LoadRows(folder));
     private readonly Lazy<Dictionary<string, Node>> _nodesById = new(() =>
-        LoadNodes(folder, ruthless).Values.GroupBy(n => n.Id, StringComparer.Ordinal)
+        LoadNodes(folder, hardMode).Values.GroupBy(n => n.Id, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal));
     private readonly Lazy<Dictionary<int, MasteryEffect>> _effects = new(() => LoadEffects(folder));
     private readonly Lazy<Dictionary<int, List<MasteryEffect>>> _groups = new(() => LoadGroups(folder, LoadEffects(folder)));
@@ -225,7 +225,7 @@ sealed class PassiveTree(string folder = "data", bool ruthless = false)
         return rows;
     }
 
-    private static Dictionary<ushort, Node> LoadNodes(string folder, bool ruthless)
+    private static Dictionary<ushort, Node> LoadNodes(string folder, bool hardMode)
     {
         string path = Path.Combine(folder, "tables", "PassiveSkills.json");
         var nodes = new Dictionary<ushort, Node>();
@@ -235,9 +235,9 @@ sealed class PassiveTree(string folder = "data", bool ruthless = false)
         {
             int graphId = r.GetProperty("PassiveSkillGraphId").GetInt32();
             if (graphId is <= 0 or > ushort.MaxValue) continue;
-            // The mode flag is per catalog, never global: regular and Ruthless characters may be online together.
+            // The mode flag is per catalog, never global: regular and HardMode characters may be online together.
             // A marked alternate replaces the entire vector, including an empty vector or explicit zero values.
-            bool alternate = ruthless && r.TryGetProperty("HasHardmodeAlternate", out var hardmode) && hardmode.GetBoolean();
+            bool alternate = hardMode && r.TryGetProperty("HasHardmodeAlternate", out var hardmode) && hardmode.GetBoolean();
             var keys = r.GetProperty(alternate ? "StatsHardmode" : "Stats").EnumerateArray().Select(s => s.GetInt32()).ToList();
             var stats = new List<(uint, int)>();
             for (int i = 0; i < keys.Count && i < 5; i++)

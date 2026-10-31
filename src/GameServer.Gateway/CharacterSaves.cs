@@ -58,7 +58,7 @@ static class CharacterSaves
         uint? Life = null, uint? Mana = null, VitalsSession? VitalsOwner = null, List<ushort>? ClusterPassives = null,
         ushort? Sulphite = null, Dictionary<ushort, string>? Tattoos = null,
         Dictionary<ushort, ushort>? TattooKeystones = null, List<List<ushort>>? AtlasPassivePresets = null,
-        ushort? AtlasPassivePoints = null, string? SelectedAtlasLayout = null)
+        ushort? AtlasPassivePoints = null, string? SelectedAtlasLayout = null, Dictionary<string, string>? ModuleData = null)
     {
         /// <summary>Fields this build doesn't know (a newer build wrote them): kept as they are by the next write.</summary>
         [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; init; }
@@ -100,10 +100,20 @@ static class CharacterSaves
 
     public static void SetSelectedHideout(string character, string area) => Update(character, s => s with { SelectedHideout = area });
 
-    /// <summary>The character's Voltaxic Sulphite (the Delve gauge's current value).</summary>
-    public static void SetSulphite(string character, ushort amount) => Update(character, s => s with { Sulphite = amount });
 
-    /// <summary>A Ruthless resource writer. Retired transfer owners retain their token so only that exact failed
+    /// <summary>A module's saved text (IPlayerWorld.CharacterData). A save from before Delve was a module has its sulphite here.</summary>
+    public static string? ModuleData(string character, string key) => Load(character) is not { } save ? null
+        : save.ModuleData?.GetValueOrDefault(key) ?? (key == "delve.sulphite" ? save.Sulphite?.ToString() : null);
+
+    /// <summary>Changes a module's saved text; a null result changes nothing.</summary>
+    public static bool ChangeModuleData(string character, string key, Func<string?, string?> change)
+    {
+        if (change(ModuleData(character, key)) is not { } next) return false;
+        Update(character, s => s with { ModuleData = new(s.ModuleData ?? []) { [key] = next } });
+        return true;
+    }
+
+    /// <summary>A saved-vitals writer. Retired transfer owners retain their token so only that exact failed
     /// transfer can resume; a newer area's token can never be reclaimed by the old connection.</summary>
     public sealed record VitalsSession(Guid CharacterId, Guid SessionId, bool Retired = false);
 

@@ -3,10 +3,10 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static readonly ConditionalWeakTable<ClientState, LeechSession> LeechSessions = new();
+    internal static readonly ConditionalWeakTable<ClientState, LeechSession> LeechSessions = new();
     internal static LeechSession LeechOf(ClientState conn) => LeechSessions.GetValue(conn, _ => new());
 
-    static (bool Life, bool Mana, bool EnergyShield, bool FullEnergyShield) LeechContext(ClientState conn)
+    internal static (bool Life, bool Mana, bool EnergyShield, bool FullEnergyShield) LeechContext(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -17,7 +17,7 @@ partial class Program
         }
     }
 
-    static void WithLeechConditions(ClientState conn, Dictionary<uint, int> stats)
+    internal static void WithLeechConditions(ClientState conn, Dictionary<uint, int> stats)
     {
         var state = LeechContext(conn);
         foreach (var (name, active) in new[] { ("is_life_leeching", state.Life), ("is_mana_leeching", state.Mana),
@@ -26,7 +26,7 @@ partial class Program
             if (Stats.Key(name) is uint key) stats[key] = active ? 1 : 0;
     }
 
-    static void ConfigureLeech(ClientState conn, Func<string, int> get, IReadOnlyDictionary<uint, int> replacements,
+    internal static void ConfigureLeech(ClientState conn, Func<string, int> get, IReadOnlyDictionary<uint, int> replacements,
         bool onLowLife)
     {
         int? Replacement(string name) => Stats.Key(name) is uint key && replacements.TryGetValue(key, out int value) ? value : null;

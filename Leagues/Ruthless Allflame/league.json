@@ -1,0 +1,15 @@
+{
+  "name": "Ruthless Allflame",
+  "parent": "Ruthless",
+  "base": "Allflame",
+  "hardcore": false,
+  "ssf": false,
+  "form": "ruthless",
+  "entryOf": "Allflame",
+  "entryKind": "form",
+  "description": "Plunder sunken treasures and harness the power of the Allflame. Ruthless: extreme item scarcity.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

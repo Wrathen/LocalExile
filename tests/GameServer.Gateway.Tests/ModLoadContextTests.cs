@@ -26,7 +26,7 @@ public sealed class ModLoadContextTests
         Directory.CreateDirectory(source);
         string path = Path.Combine(source, "test.dll");
         File.Copy(Path.Combine(AppContext.BaseDirectory, "GameServer.Modding.TestMod.dll"), path);
-        var context = new ModLoadContext("copy-test", source, []);
+        var context = new ModLoadContext("copy-test", source, false, []);
         var assembly = context.LoadCopy(path);
         Assert.Equal(Path.Combine(context.CopyDirectory, "test.dll"), assembly.Location);
         File.Delete(path); // The live assembly never locks its original build output.

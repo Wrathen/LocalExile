@@ -26,7 +26,7 @@ partial class Program
 
     // An area transition click. Plain: change area (0x2b2 now, the move itself once the client acknowledges with 0x2cb).
     // With Ctrl: list the destination's instances (0xae) for the client's instance chooser.
-    static async Task OnUseObject(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task OnUseObject(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, double requestedAt)
     {
         lock (conn.Monsters)
@@ -69,27 +69,12 @@ partial class Program
         }
         if (conn.Instance.Ground.Get(use.TargetId) is { } ground)
         {
-            if (await PickUpQuestItem(remote, stream, ciphers, conn, use.TargetId, ground, use, requestedAt)) return;   // a1q5's Medicine Chest
+            if (await GameEvents.AnyGroundItemUse(conn, use.TargetId, ground, use, requestedAt)) return;
             await PickUpGroundItem(remote, stream, ciphers, conn, use.TargetId, ground, use, requestedAt);
             return;
         }
-        if (conn.TutorialChestId == use.TargetId && conn.TutorialChest is { } tutorialChest)
-        {
-            await OpenTutorialChest(remote, stream, ciphers, conn, use, tutorialChest, requestedAt);
-            return;
-        }
-        GlyphQuest.Nest? nest;
-        lock (conn.GlyphNests) nest = conn.GlyphNests.GetValueOrDefault(use.TargetId);
-        if (nest is not null)
-        {
-            await OpenRhoaNest(remote, stream, ciphers, conn, use, nest);
-            return;
-        }
-        if (conn.GlyphWallId != 0 && use.TargetId == conn.GlyphWallId)
-        {
-            await UseGlyphWall(remote, stream, ciphers, conn, use);
-            return;
-        }
+        // Objects of the Core modules.
+        if (await GameEvents.AnyObjectUse(conn, use, requestedAt)) return;
         if (use.TargetId == WaypointCatalog.ObjectId && conn.Layout.Waypoint is { } waypoint)
         {
             await UseWaypoint(remote, stream, ciphers, conn, use, waypoint, requestedAt);
@@ -102,45 +87,8 @@ partial class Program
             await TalkToNpc(remote, stream, ciphers, conn, use, npc, requestedAt);
             return;
         }
-        if (conn.BackPortal is { } home && use.TargetId == home.Id && OpenPortals.TryGetValue(CharacterName(conn), out var origin))
-        {
-            if (!TryBeginObjectWalk(conn, requestedAt, home.X, home.Y, AreaTransitionObjectSize, out var homeWalk)) return;
-            var (homeAction, homeNow, _, _, homeArrive) = homeWalk;
-            if (homeArrive > homeNow) await Task.Delay(TimeSpan.FromSeconds(homeArrive - homeNow));
-            if (!PlayerActionCurrent(conn, homeAction)) return;
-            await ChangeArea(remote, stream, ciphers, conn, new PendingTransfer(origin.Area, origin.Instance, false, ArriveAt: (origin.X, origin.Y)),
-                "back through the town portal");
-            return;
-        }
-        if (conn.ReturnPortal is { } back && use.TargetId == back.Id)
-        {
-            await UseMapReturnPortal(remote, stream, ciphers, conn, use, (back.X, back.Y), requestedAt);
-            return;
-        }
-        (int X, int Y, int Index)? portal;
-        lock (conn.MapPortals) portal = conn.MapPortals.TryGetValue(use.TargetId, out var at) ? at : null;
-        if (portal is { } p)
-        {
-            await UseMapPortal(remote, stream, ciphers, conn, use, p, requestedAt);
-            return;
-        }
-        HideoutCatalog.Doodad? doodad;
-        lock (conn.HideoutDoodads) doodad = conn.HideoutDoodads.GetValueOrDefault(use.TargetId);
-        if (doodad is not null)
-        {
-            await UseMapDevice(remote, stream, ciphers, conn, use, doodad, requestedAt);
-            return;
-        }
-        if (conn.DelveGeneratorObject != 0 && use.TargetId == conn.DelveGeneratorObject)
-        {
-            await OpenDelveGenerator(remote, stream, ciphers, conn, requestedAt);
-            return;
-        }
-        if (conn.DelveCrawlerObject != 0 && use.TargetId == conn.DelveCrawlerObject)
-        {
-            await OpenDelveChart(remote, stream, ciphers, conn, use, requestedAt);
-            return;
-        }
+        // Objects of a module or mod.
+        if (await ServerHooks.ObjectUsed(new(PlayerOf(conn), use.TargetId, requestedAt))) return;
         if (conn.StashObject != 0 && use.TargetId == conn.StashObject)
         {
             await OpenStash(remote, stream, ciphers, conn, use, requestedAt);
@@ -149,21 +97,6 @@ partial class Program
         if (conn.GuildStashObject != 0 && use.TargetId == conn.GuildStashObject)
         {
             await OpenGuildStash(remote, stream, ciphers, conn, use, requestedAt);
-            return;
-        }
-        if (conn.HeistLockerObject != 0 && use.TargetId == conn.HeistLockerObject)
-        {
-            await OpenHeistLocker(remote, stream, ciphers, conn);
-            return;
-        }
-        if (conn.CraftingBenchObject != 0 && use.TargetId == conn.CraftingBenchObject)
-        {
-            await OpenCraftingBench(remote, stream, ciphers, conn, use, requestedAt);
-            return;
-        }
-        if (conn.HorticraftingObject != 0 && use.TargetId == conn.HorticraftingObject)
-        {
-            await OpenHorticrafting(remote, stream, ciphers, conn, requestedAt);
             return;
         }
         var (_, transition) = conn.Layout.AreaTransitions.FirstOrDefault(e => e.Id == use.TargetId);
@@ -213,7 +146,7 @@ partial class Program
     }
 
     // The destination's instances (0xae) for the client's instance chooser; its pick (0xaf) changes area.
-    static async Task ShowInstances(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, ushort dest, bool atWaypoint)
+    internal static async Task ShowInstances(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, ushort dest, bool atWaypoint)
     {
         var list = await InstanceControl.CallAsync(new ControlRequest { Op = "list", Ticket = conn.Ticket, Area = dest });
         var instances = list.Instances ?? [];
@@ -226,7 +159,7 @@ partial class Program
 
     // A waypoint click (C→S 0x24 on the waypoint, Agents/docs/protocol/16-waypoints.md): walk there, activate it if it is
     // not yet, then open the World panel for travel (S→C 0x7b kind 0). The panel's pick arrives as C→S 0x4d.
-    static async Task UseWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task UseWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InstanceTransfer.UseSkillOnObject use, WaypointObject waypoint, double requestedAt)
     {
         if (!TryBeginObjectWalk(conn, requestedAt, waypoint.GridX, waypoint.GridY, WaypointObjectSize, out var objectWalk)) return;
@@ -247,7 +180,7 @@ partial class Program
     // Activates this area's waypoint for the character (saved, added to the saved ones) and tells the client: a new 0x4c with
     // the area's bit set plays the waypoint's activation. Towns activate on entry, other waypoints when the player comes near
     // or clicks them.
-    static async Task ActivateWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task ActivateWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         if (WaypointCatalog.Areas.Find(conn.Layout.Hash) is not { } entry) return;
         lock (conn.Monsters)
@@ -260,7 +193,7 @@ partial class Program
     }
 
     // After the player is in: a town's waypoint activates on entry, then the character's waypoints (S→C 0x4c).
-    static async Task SendWaypoints(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task SendWaypoints(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (WaypointCatalog.Areas.Entries.Count == 0) return;
         if (WaypointCatalog.Areas.Find(conn.Layout.Hash) is { IsTown: true } town)
@@ -276,7 +209,7 @@ partial class Program
         await SendWaypointList(remote, stream, ciphers, conn, "the character's waypoints");
     }
 
-    static async Task SendWaypointList(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task SendWaypointList(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         var entries = WaypointCatalog.Areas.Entries;
         List<int> bits;
@@ -297,7 +230,7 @@ partial class Program
     // and what the World panel needs (16-waypoints.md §4): the visit flags of every area entered or whose waypoint is
     // activated (they reveal the neighbouring pins and so the connection lines), and the access flags of the activated
     // waypoints' areas (their pins become travel targets).
-    static List<int> PlayerQuestFlags(ClientState conn)
+    internal static List<int> PlayerQuestFlags(ClientState conn)
     {
         // ThisIsMyHideout only in a hideout and the Mine Encampment, where Niko needs it for his own options; elsewhere NPCs
         // show their "not my hideout" rows. (It does not hide Sell Items: the client offers Sell only in towns and hideouts.)
@@ -313,7 +246,7 @@ partial class Program
     }
 
     // Entering an area marks it visited (saved, added to the saved ones) before the player object carries the quest flags.
-    static void RecordVisit(ClientState conn)
+    internal static void RecordVisit(ClientState conn)
     {
         if (WaypointCatalog.Visits.For(conn.Layout.Id).Count == 0) return;
         lock (conn.Monsters)
@@ -326,7 +259,7 @@ partial class Program
 
     // C→S 0x4d: a waypoint picked on the World panel. An activated waypoint changes area (the player arrives next to its
     // waypoint); with Ctrl, the instance chooser first.
-    static async Task TravelByWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, InstanceWaypoints.Travel travel)
+    internal static async Task TravelByWaypoint(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, InstanceWaypoints.Travel travel)
     {
         var entry = WaypointCatalog.Areas.Find(travel.AreaHash16);
         bool activated;
@@ -340,7 +273,7 @@ partial class Program
 
     // To the character's hideout (21-hideouts.md §3): "/hideout" (C→S 0x16 command 45) or the World panel's Hideout button
     // (C→S 0x17a). Its own instance (Auth re-enters the live one), arriving next to its waypoint.
-    static async Task WarpToHideout(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task WarpToHideout(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         if (HomeHideout(conn) is not { } hideout)
         {
@@ -351,14 +284,14 @@ partial class Program
         await ChangeArea(remote, stream, ciphers, conn, new PendingTransfer(hideout.AreaHash16, 0, false, AtWaypoint: true), $"{why}: {hideout.Name}");
     }
 
-    static HideoutCatalog.Hideout? HomeHideout(ClientState conn) =>
+    internal static HideoutCatalog.Hideout? HomeHideout(ClientState conn) =>
         HideoutCatalog.Selected(CharacterSaves.Load(CharacterName(conn))?.SelectedHideout);
 
-    static HideoutScene? HideoutFurniture(ClientState conn) => conn.Furniture ??=
+    internal static HideoutScene? HideoutFurniture(ClientState conn) => conn.Furniture ??=
         HideoutCatalog.ByArea(conn.Layout.Hash) is { } hideout && HideoutCatalog.Default is { } fallback
             ? HideoutEditing.Apply(HideoutScene.Build(hideout, fallback, conn.Layout.Walkable), SavedHideoutPlacements(conn)) : null;
 
-    static async Task SelectHideout(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, (int Row, bool Guild) selected)
+    internal static async Task SelectHideout(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, (int Row, bool Guild) selected)
     {
         if (selected.Guild || conn.PendingTransfer is not null) return;
         var hideout = HideoutCatalog.Hideouts.FirstOrDefault(h => h.Row == selected.Row);
@@ -374,10 +307,10 @@ partial class Program
     }
 
     // 0x2b2 now; the move itself (0x27) once the client acknowledges with 0x2cb.
-    static async Task ChangeArea(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, PendingTransfer t, string why)
+    internal static async Task ChangeArea(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, PendingTransfer t, string why)
     {
         if (!conn.TryBeginAreaChange(t, out var projectiles)) return;
-        await CancelPlayerTrade(conn, "left the area");
+        await ServerHooks.PlayerLeaving(PlayerOf(conn), "left the area");
         // Remove outstanding visuals while the old world still exists, before 0x2b2. If Auth refuses the transfer,
         // their canceled tasks must not leave permanent projectile/explosion objects in the retained world.
         foreach (uint id in projectiles)
@@ -391,7 +324,7 @@ partial class Program
     // The capture tour's next step (CaptureTour), after an area load (0x7d) or when /tour starts: at the tour's current
     // stop, wait for scripts/walkmaps to write it, then go to a new instance of the next (area, seed). A tour saved before
     // a restart (data/tour-left.txt) resumes at the character's first area load.
-    static async Task ContinueTour(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool starting = false)
+    internal static async Task ContinueTour(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool starting = false)
     {
         // Tours record with scripts/walkmaps: without it a saved tour (data/tour-left.txt) is left alone.
         if (!AreaLayouts.Recording) return;
@@ -438,10 +371,10 @@ partial class Program
             if (!ReferenceEquals(conn.PendingTransfer, t)) return; // the acknowledgement and fallback timer can race
             conn.PendingTransfer = null;
         }
-        if (!RetireRuthlessVitalsForTransfer(conn))
+        if (!RetireVitalsForTransfer(conn))
         {
             conn.ResumeAfterFailedTransfer();
-            Console.WriteLine($"[gateway] {remote} transfer refused: Ruthless resources belong to a newer connection");
+            Console.WriteLine($"[gateway] {remote} transfer refused: saved life and mana belong to a newer connection");
             return;
         }
         var r = await (control ?? (request => InstanceControl.CallAsync(request)))(new ControlRequest
@@ -451,7 +384,7 @@ partial class Program
         t.Done?.Invoke(r);
         if (!r.Ok)
         {
-            ResumeRuthlessVitalsAfterFailedTransfer(conn);
+            ResumeVitalsAfterFailedTransfer(conn);
             conn.ResumeAfterFailedTransfer();
             Console.WriteLine($"[gateway] {remote} transfer failed: {r.Error}");
             return;

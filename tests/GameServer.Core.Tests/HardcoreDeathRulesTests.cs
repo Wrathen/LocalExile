@@ -14,7 +14,7 @@ public class HardcoreDeathRulesTests
     [InlineData("Hardcore", "Standard", false)]
     public void Death_retains_base_and_ssf_unless_ruthless_is_permanently_dead(string league, string target, bool terminal)
     {
-        var source = LeagueCatalog.Default.ResolveSavedLeague(league)!;
+        var source = LeagueCatalog.FromEnvironment().ResolveSavedLeague(league)!;
         var original = NewCharacter(league);
         var dead = HardcoreDeathRules.Apply(original, source, DiedAt);
         Assert.Equal(target, dead.League);

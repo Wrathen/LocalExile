@@ -1,4 +1,5 @@
 using GameServer.Core.Protocol.Instance;
+using GameServer.Modules.Harvest;
 
 namespace GameServer.Gateway.Tests;
 
@@ -6,10 +7,10 @@ namespace GameServer.Gateway.Tests;
 public class HarvestPaymentTests : IDisposable
 {
     readonly string name = "Harvest" + Guid.NewGuid().ToString("N");
-    const byte Main = PlayerInventories.MainInventory, Slot = PlayerInventories.HarvestCrafting;
+    const byte Main = PlayerInventories.MainInventory, Slot = HarvestModule.Slot;
     static ItemCatalog Catalog => BenchCraftingTests.Setup.Value.Catalog;
     static ItemRolls Rolls => BenchCraftingTests.Setup.Value.Rolls;
-    static HarvestCrafting Harvest => new(Catalog, Rolls);
+    static HarvestCrafting Harvest => new(new ModuleItemCrafting(Catalog, Rolls));
     PlayerInventories Items => PlayerInventories.For(name, Catalog);
     AccountStash Stash => AccountStash.For(name + "Account", Catalog);
     public HarvestPaymentTests() => TestSaves.Ensure();
@@ -36,7 +37,7 @@ public class HarvestPaymentTests : IDisposable
         Deposit(currency, 2);
         Deposit(currency, amount + 5, 1);
 
-        var result = ItemMoves.HarvestAtStation(Items, Stash, Harvest, Fire.Hash, new Random(12));
+        var result = ItemMoves.CraftInSlot(Items, Stash, Slot, item => Harvest.Apply(Fire.Hash, item, new Random(12)));
 
         Assert.NotNull(result);
         Assert.Equal(0, Items.Count(Main, currency));

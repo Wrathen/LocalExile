@@ -20,16 +20,16 @@ public sealed partial class AscendancyGatewayIntegrationTests
         var items = PlayerInventories.For(game.Character, Program.Items);
         var conn = game.State;
         // Without the belt a kill steals nothing.
-        Program.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed"));
+        UniqueBeltsFeature.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed"));
         Assert.Empty(conn.StolenMods.Stats());
 
         items.Add(PlayerInventories.Belt, 0, 0, Program.Uniques.Create("Headhunter", new Random(1))!);
         int before = Program.PoolsFor(conn, 70).MovementVelocityPct;
         // Magic monsters and unique ones give nothing.
-        Program.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed", MonsterRarity.Magic));
+        UniqueBeltsFeature.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed", MonsterRarity.Magic));
         Assert.Empty(conn.StolenMods.Stats());
 
-        Program.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed"));
+        UniqueBeltsFeature.StealMonsterMods(conn, RareWith("MonsterModAttackCastMovementSpeed"));
         Assert.Equal(before + 40, Program.PoolsFor(conn, 70).MovementVelocityPct);
         double now = conn.Clock.Elapsed.TotalSeconds;
         var first = conn.StolenMods.Step(now, dead: false);
@@ -99,8 +99,8 @@ public sealed partial class AscendancyGatewayIntegrationTests
         var hit = DamagePacket.Of(DamageType.Physical, 100, 100);
         int against = player[Program.Stats.Key("damage_+%_vs_rare_monsters")!.Value];
         Assert.InRange(against, 20, 40);
-        Assert.Equal(100 + against, Program.WithDamageVsRarity(player, RareWith("MonsterModAttackCastMovementSpeed"), hit)[DamageType.Physical].Min, 3);
-        Assert.Equal(100, Program.WithDamageVsRarity(player, RareWith("MonsterModAttackCastMovementSpeed", MonsterRarity.Magic), hit)[DamageType.Physical].Min, 3);
+        Assert.Equal(100 + against, UniqueBeltsFeature.WithDamageVsRarity(player, RareWith("MonsterModAttackCastMovementSpeed"), hit)[DamageType.Physical].Min, 3);
+        Assert.Equal(100, UniqueBeltsFeature.WithDamageVsRarity(player, RareWith("MonsterModAttackCastMovementSpeed", MonsterRarity.Magic), hit)[DamageType.Physical].Min, 3);
     }
 
     [Fact]

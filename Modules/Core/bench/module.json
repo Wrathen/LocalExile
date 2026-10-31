@@ -1,0 +1,7 @@
+{
+  "id": "bench",
+  "version": "1.0.0",
+  "kind": "feature",
+  "depends": [],
+  "assembly": "bin/bench.dll"
+}

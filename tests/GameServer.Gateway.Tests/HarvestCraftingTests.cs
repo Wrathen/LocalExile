@@ -1,4 +1,5 @@
 using GameServer.Core.Protocol.Instance;
+using GameServer.Modules.Harvest;
 
 namespace GameServer.Gateway.Tests;
 
@@ -9,7 +10,7 @@ public class HarvestCraftingTests
         string data = BenchCraftingTests.Data();
         var catalog = new ItemCatalog(data);
         var rolls = new ItemRolls(catalog, data);
-        return (catalog, rolls, new HarvestCrafting(catalog, rolls, data));
+        return (catalog, rolls, new HarvestCrafting(new ModuleItemCrafting(catalog, rolls), data));
     });
 
     static HarvestCrafting Harvest => Setup.Value.Harvest;

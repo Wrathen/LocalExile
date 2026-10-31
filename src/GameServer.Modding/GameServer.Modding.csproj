@@ -1,7 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The only API a mod sees (Agents/docs/dev/modding.md). It references nothing of the server: the Gateway implements
-       these contracts, and its own types stay internal. -->
+  <!-- The API mods and modules see (Agents/docs/dev/modding.md, modules.md). The Gateway implements these contracts, and its own
+       types stay internal. It uses GameServer.Core's client protocol and items, which modules may use and mods may not. -->
+  <ItemGroup>
+    <ProjectReference Include="..\GameServer.Core\GameServer.Core.csproj" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

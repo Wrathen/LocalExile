@@ -15,11 +15,12 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
   `SplitClientMessages` drops the rest of a read at an unknown id, so every message after it in that read is lost.
 - Mods: the rest after the [mod host](../status/setup-and-tooling.md) ([modding](../docs/dev/modding.md)).
   Catalog overrides (a mod replacing rows of the Gateway's catalogs) are the hook the host does not have yet.
-  Loose `.cs` files in a mod folder compile with Roslyn on save (chat commands first).
-  Every league becomes one league module that names the feature modules it enables (Harvest, Delve, ...); Ruthless
-  moves out of `Program.LeagueModes.cs` first, then legacy and custom leagues.
-  Standard stays built in and cannot be turned off: a character whose league module is missing plays in Standard.
-  Existing systems move out of the static `Program` one at a time behind the contracts API.
+  League migration: the client's Migrate and Migrate All buttons, and the differences they show, for ended leagues. Send 0x1a with the account's ended
+  leagues, log a live click for the C→S message (not found statically: `0x140cc7aa0` dispatches through vtable `0x1431e8660`), then move characters, stash tabs, gold and
+  modules' saved data to the parent in one transaction.
+  New systems start as modules in `Modules/Core/`.
+  The Gateway tests do not start the module host yet, so dispatch tests of moved features need `ServerModules.Start` in `TestEnvironment`.
+  start as a module.
 - Rebuild the reverse-engineering setup from a fresh clone (Ghidra import, REA, Frida) and fix whatever the guide
   misses.
 - Unnamed fields: [04](../docs/protocol/04-player-entity.md), [05](../docs/protocol/05-inventories-and-ui.md) and

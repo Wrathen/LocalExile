@@ -1,0 +1,7 @@
+{
+  "id": "cosmetics",
+  "version": "1.0.0",
+  "kind": "feature",
+  "depends": [],
+  "assembly": "bin/cosmetics.dll"
+}

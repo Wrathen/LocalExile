@@ -1,0 +1,10 @@
+{
+  "name": "Hardcore",
+  "parent": "Standard",
+  "base": "Standard",
+  "hardcore": true,
+  "ssf": false,
+  "entryOf": "Standard",
+  "entryKind": "hardcore",
+  "description": "A character killed in Hardcore is moved to Standard."
+}

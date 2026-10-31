@@ -171,15 +171,23 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     public uint Seed => seed;
     public string? Character { get; init; }
     public Guid? CharacterId { get; init; }
-    public readonly Guid RuthlessVitalsSessionId = Guid.NewGuid();
+    public readonly Guid VitalsSessionId = Guid.NewGuid();
     /// <summary>The account the character belongs to (Auth's resolve): its stash (AccountStash) is shared by all of them.</summary>
     public string? Account { get; init; }
     public string? League { get; init; }
     public bool Hardcore { get; init; }
     public bool Ssf { get; init; }
-    public bool Ruthless { get; init; }
-    public double RuthlessGemExperienceCarry;
-    public bool RuthlessDeathHandled;
+    public string? LeagueForm { get; init; }
+    /// <summary>The league this connection plays by (Program.LeagueFor); LeagueForm above is the character's league form, from Auth.</summary>
+    internal LeagueRuntime? LeagueModule;
+    /// <summary>The hideout scene furnishing this area, for the modules placing stations.</summary>
+    internal HideoutScene? CurrentHideoutScene;
+    /// <summary>The module whose native window is open (IPlayerWorld.OpenWindow).</summary>
+    public string? ModuleWindow;
+    /// <summary>What sends to this client, for what is reached only with the connection (the built-in mods).</summary>
+    internal (string Remote, System.Net.Sockets.NetworkStream Stream, GameServer.Core.Protocol.Login.ConnectionCiphers Ciphers) Wire;
+    public double GemExperienceCarry;
+    public bool BossRecoveryHandled;
     public bool HardcoreDeathRecorded;
     /// <summary>The character's last town (HASH16, from Auth's resolve): Resurrect in Town goes there. 0 before the
     /// character has entered a town (the death screen then has no Resurrect in Town).</summary>
@@ -526,26 +534,13 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     public OpenShop? Shop;
     // The town's Stash object (0 = none here), and the stash tabs whose inventory this connection has sent (0xc0 + 0xc8).
     public uint StashObject;
-    /// <summary>The Delve Crawler in the Azurite Mine Encampment (Program.Delve), and its cell.</summary>
-    public uint DelveCrawlerObject;
-    public (int X, int Y) DelveCrawlerAt;
-    public readonly List<uint> DelveCrawlerBlockers = [];
-    public readonly List<uint> DelveCrawlerAttachments = [];
-    public uint DelveGeneratorObject;
-    public bool DelveGeneratorOpen;
     public readonly HashSet<int> StashTabsSent = [];
     /// <summary>The guild stash: its object in the hideout, its tabs this connection has the contents of, and whether its
     /// panel is the one open (then the stash messages act on it; StashOf).</summary>
     public uint GuildStashObject;
     public (int X, int Y) GuildStashAt;
-    public uint HeistLockerObject;
-    public (int X, int Y) HeistLockerAt;
-    public uint HorticraftingObject;
-    public (int X, int Y) HorticraftingAt;
     public uint CraftingBenchObject;
     public bool BenchOpen;
-    /// <summary>The Horticrafting Station's recipe browser is the open window; its craft requests are served only then.</summary>
-    public bool HarvestOpen;
     public bool BenchBalanceSent;
     public uint BenchBalanceRevision;
     public IReadOnlyList<InventoryItem> BenchBalanceItems = [];
@@ -592,8 +587,6 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
 
     /// <summary>The character's league quest flags (client ids, Quests.League); not saved: every character has the same.</summary>
     public HashSet<int> LeagueQuestFlags = [.. Quests.League.EveryCharacter, .. Program.Bench.UnlockFlags];
-    /// <summary>What the next Delve chart (S→C 0x240) carries; /delve_chart sets it (one cell at 0, 0 by default).</summary>
-    public (uint A, ushort B, List<InstanceDelve.Cell> Cells) DelveChartProbe = (0, 0, [new(0, 0, 0, 0, 0)]);
 
     /// <summary>The hideout doodads created in this area (the map device), by object id.</summary>
     public readonly Dictionary<uint, HideoutCatalog.Doodad> HideoutDoodads = [];

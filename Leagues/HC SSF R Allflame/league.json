@@ -1,0 +1,15 @@
+{
+  "name": "HC SSF R Allflame",
+  "parent": "SSF Ruthless Allflame",
+  "base": "Allflame",
+  "hardcore": true,
+  "ssf": true,
+  "form": "ruthless",
+  "entryOf": "HC SSF Allflame",
+  "entryKind": "form",
+  "description": "Plunder sunken treasures and harness the power of the Allflame. Ruthless: extreme item scarcity. Solo Self-Found. A character killed moves to SSF Ruthless Allflame.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

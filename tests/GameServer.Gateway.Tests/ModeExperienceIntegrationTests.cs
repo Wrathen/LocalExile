@@ -12,9 +12,9 @@ public sealed partial class AscendancyGatewayIntegrationTests
         oldArea.Pools = Program.PoolsFor(oldArea, 1);
         oldArea.Experience = CharacterStats.ExperienceFor(1);
         uint before = game.State.Experience;
-        var rules = Program.RuthlessSettings.Current;
+        var rules = ServerLeagues.Live("ruthless")!;
         const uint gain = 10_000;
-        uint scaled = RuthlessRules.Scale(gain, rules.ExperienceMultiplier(80));
+        uint scaled = GameServer.Modding.LeagueRules.Scale(gain, rules.ExperienceMultiplier(80));
 
         var first = Program.RecordExperienceGain(game.State, gain);
         if (scaled == 0)

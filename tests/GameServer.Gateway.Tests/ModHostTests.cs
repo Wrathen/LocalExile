@@ -181,7 +181,7 @@ public sealed class ModHostTests : IDisposable
     [Fact]
     public async Task A_mod_waits_for_what_it_depends_on_and_reloads_with_it()
     {
-        AddMod("b", """{ "id": "b", "kind": "league", "depends": ["c"] }""");
+        AddMod("b", """{ "id": "b", "kind": "feature", "depends": ["c"] }""");
         _host.Start(watch: false);
         Assert.Equal("needs c (no such mod)", Assert.Single(_host.Mods()).Error);
         AddMod("c");
@@ -194,7 +194,7 @@ public sealed class ModHostTests : IDisposable
         await _host.RunCommand(_player, "count_b", []);
         Assert.Equal(["b count 1", "b count 2", "b count 1"], _player.Told);
         Assert.Contains("[mods] unloaded b", Logged());
-        Assert.Equal(ModKind.League, _host.Mods().Single(m => m.Id == "b").Kind);
+        Assert.Equal(ModKind.Feature, _host.Mods().Single(m => m.Id == "b").Kind);
     }
 
     [Fact]
@@ -244,6 +244,231 @@ public sealed class ModHostTests : IDisposable
         Assert.Equal(["x", "y"], full.Depends);
     }
 
+    string AddScript(string id, string text, string file = "script.cs")
+    {
+        string dir = Path.Combine(_root, id);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, file), text);
+        return dir;
+    }
+
+    static string PingScript(string reply) => $$"""
+        public sealed class Ping : IMod
+        {
+            public void Load(IModContext mod) => mod.OnChatCommand("ping", "/ping (a script's)", c => c.Player.Tell("{{reply}}"));
+        }
+        """;
+
+    [Fact]
+    public async Task A_loose_script_needs_no_manifest_and_compiles_when_it_loads()
+    {
+        AddScript("s", PingScript("pong"));
+        _host.Start(watch: false);
+        Assert.True(await _host.RunCommand(_player, "ping", []));
+        Assert.Equal(["pong"], _player.Told);
+        Assert.Equal(new ModHost.Status("s", "0", ModKind.Script, 1, null), Assert.Single(_host.Mods()));
+    }
+
+    [Fact]
+    public async Task Saving_a_script_reloads_it_and_a_compile_error_says_where()
+    {
+        AddScript("s", PingScript("one"));
+        _host.Start();
+        await _host.RunCommand(_player, "ping", []);
+        AddScript("s", PingScript("two"));
+        await Until(async () => { await _host.RunCommand(_player, "ping", []); return _player.Told.Contains("two"); });
+        AddScript("s", "public sealed class Broken : IMod { }");
+        await Until(() => Task.FromResult(_host.Mods().Single().Error is not null));
+        Assert.Contains("script.cs(1,", _host.Mods().Single().Error);
+        Assert.Contains("CS0535", _host.Mods().Single().Error);
+        Assert.False(await _host.RunCommand(_player, "ping", []));
+        AddScript("s", PingScript("three"));
+        await Until(async () => { await _host.RunCommand(_player, "ping", []); return _player.Told.Contains("three"); });
+    }
+
+    static async Task Until(Func<Task<bool>> done)
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            if (await done()) return;
+            await Task.Delay(100);
+        }
+        Assert.Fail("the mod did not reload in time");
+    }
+
+    [Fact]
+    public async Task A_script_cannot_compile_against_the_server_but_can_use_a_dependency()
+    {
+        AddScript("server", "public sealed class S : IMod { public void Load(IModContext mod) { _ = typeof(GameServer.Core.Accounts.League); } }");
+        AddScript("base", "public static class Shared { public const string Text = \"shared\"; } public sealed class B : IMod { public void Load(IModContext mod) { } }");
+        string user = AddScript("user", "public sealed class U : IMod { public void Load(IModContext mod) => mod.OnChatCommand(\"shared\", \"/shared\", c => c.Player.Tell(Shared.Text)); }");
+        File.WriteAllText(Path.Combine(user, ModHost.ManifestFile), """{ "depends": ["base"], "kind": "script" }""");
+        _host.Start(watch: false);
+        Assert.Contains("CS0234", _host.Mods().Single(m => m.Id == "server").Error);
+        Assert.True(await _host.RunCommand(_player, "shared", []));
+        Assert.Equal(["shared"], _player.Told);
+    }
+
+    [Fact]
+    public async Task An_unloaded_script_is_freed()
+    {
+        AddScript("s", PingScript("pong"));
+        _host.Start(watch: false);
+        Assert.True(_host.SetEnabled("s", false));
+        Assert.True(await _host.Unloaded("s"));
+    }
+
+    static string ModulePing(string reply) => $$"""
+        public sealed class Ping : IModule
+        {
+            public void Load(IModuleContext module) => module.OnChatCommand("ping", "/ping", c => c.Player.Tell("{{reply}}"));
+        }
+        """;
+
+    [Fact]
+    public async Task A_module_stays_loaded_when_its_folder_goes_and_a_new_folder_waits_for_the_next_start()
+    {
+        string dir = AddScript("m", ModulePing("pong"));
+        using var host = new ModHost(_root, _ => { }, modules: true);
+        host.Start(watch: false);
+        Assert.Throws<InvalidOperationException>(() => host.SetEnabled("m", false));
+        Directory.Delete(dir, recursive: true);
+        host.Reload("m");
+        Assert.True(await host.RunCommand(_player, "ping", []));
+        AddScript("later", ModulePing("later"));
+        host.Reload();
+        Assert.False(host.IsLoaded("later"));
+    }
+
+    [Fact]
+    public async Task A_module_hot_reloads_and_bad_files_leave_the_old_one_running()
+    {
+        AddScript("m", ModulePing("one"));
+        using var host = new ModHost(_root, _ => { }, modules: true);
+        host.Start(watch: false);
+        AddScript("m", "broken");
+        host.Reload("m");
+        Assert.True(await host.RunCommand(_player, "ping", []));
+        AddScript("m", "public sealed class Throws : IModule { public void Load(IModuleContext module) => throw new Exception(); }");
+        host.Reload("m");
+        Assert.True(await host.RunCommand(_player, "ping", []));
+        Assert.Equal(["one", "one"], _player.Told);
+        AddScript("m", ModulePing("two"));
+        host.Reload("m");
+        Assert.True(await host.RunCommand(_player, "ping", []));
+        Assert.Equal("two", _player.Told[^1]);
+    }
+
+    [Fact]
+    public void A_mod_cannot_be_a_league()
+    {
+        AddMod("manifest", """{ "kind": "league" }""");
+        _host.Start(watch: false);
+        Assert.Contains("a league belongs in Leagues/", _host.Mods().Single(m => m.Id == "manifest").Error);
+    }
+
+    [Fact]
+    public void Each_host_takes_only_its_own_entry_points()
+    {
+        AddScript("s", "public sealed class M : IMod { public void Load(IModContext mod) { } }");
+        using var host = new ModHost(_root, _ => { }, modules: true);
+        host.Start(watch: false);
+        Assert.Contains("IModule", host.Mods().Single().Error);
+    }
+
+    [Fact]
+    public async Task Hooks_of_modules_run_before_those_of_mods()
+    {
+        string other = _root + "-modules";
+        Directory.CreateDirectory(Path.Combine(other, "first"));
+        File.WriteAllText(Path.Combine(other, "first", "first.cs"), """
+            public sealed class First : IModule
+            {
+                public void Load(IModuleContext module)
+                {
+                    module.ModifyExperience(e => e.Experience += 5);
+                    module.OnChatCommand("both", "/both", c => c.Player.Tell("module"));
+                }
+            }
+            """);
+        AddScript("second", """
+            public sealed class Second : IMod
+            {
+                public void Load(IModContext mod)
+                {
+                    mod.ModifyExperience(e => e.Experience *= 2);
+                    mod.OnChatCommand("both", "/both", c => c.Player.Tell("mod"));
+                }
+            }
+            """);
+        using var modules = new ModHost(other, _ => { }, modules: true);
+        modules.Start(watch: false);
+        _host.Start(watch: false);
+        var hooks = new ServerHooks(modules, _host);
+        Assert.Equal(30u, hooks.Experience(_player, new("", "", 1, MonsterRarity.Normal, 0, 0), 10));
+        Assert.True(await hooks.RunCommand(_player, "both", []));
+        Assert.Equal(["module"], _player.Told);
+    }
+
+    void AddModule(string id, string manifest, string body = "")
+    {
+        string dir = AddScript(id, "public sealed class M_" + id + " : IModule { public void Load(IModuleContext module) { " + body + " } }");
+        File.WriteAllText(Path.Combine(dir, ModHost.ModuleManifestFile), manifest);
+    }
+
+    [Fact]
+    public async Task Core_modules_load_like_the_others_and_only_when_a_league_wants_them()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "Core"));
+        foreach (string id in new[] { "wanted", "unwanted" })
+            AddScript(Path.Combine("Core", id), "public sealed class M_" + id + " : IModule { public void Load(IModuleContext module) => module.OnChatCommand(\"" + id + "\", \"/x\", c => c.Player.Tell(\"ran\")); }");
+        using var host = new ModHost(_root, _ => { }, modules: true) { Wanted = () => new HashSet<string> { "wanted" } };
+        host.Start(watch: false);
+        Assert.True(host.IsLoaded("wanted"));
+        Assert.False(host.IsLoaded("unwanted"));
+        Assert.True(await host.RunCommand(_player, "wanted", []));
+    }
+
+    [Fact]
+    public async Task A_league_compiles_its_source_into_its_binaries_and_runs_from_either()
+    {
+        string source = Path.Combine(_root, "Grim", "Source");
+        Directory.CreateDirectory(source);
+        File.WriteAllText(Path.Combine(_root, "Grim", ModHost.LeagueManifestFile), """{ "parent": "Standard" }""");
+        File.WriteAllText(Path.Combine(source, "Grim.cs"), "public sealed class Grim : League { public override void Load(IModuleContext league) => league.OnChatCommand(\"grim\", \"/grim\", c => c.Player.Tell(\"ran\")); }");
+        using (var compiled = new ModHost(_root, _ => { }, modules: true, leagues: true))
+        {
+            compiled.Start(watch: false);
+            Assert.True(await compiled.RunCommand(_player, "grim", []));
+        }
+        Directory.Delete(source, recursive: true);
+        using var built = new ModHost(_root, _ => { }, modules: true, leagues: true);
+        built.Start(watch: false);
+        Assert.True(await built.RunCommand(_player, "grim", []));
+    }
+
+    [Fact]
+    public async Task A_module_a_league_does_not_use_does_nothing_for_its_players()
+    {
+        AddModule("station", "{ }", """
+            module.OnHideoutReady(p => p.Tell("placed"));
+            module.OnObjectUsed(async u => { await u.Player.Tell("used"); return true; });
+            module.OnChatCommand("station", "/station", c => c.Player.Tell("ran"));
+            """);
+        bool uses = true;
+        using var host = new ModHost(_root, _ => { }, modules: true) { Active = (_, _) => uses };
+        host.Start(watch: false);
+        await host.HideoutReady(_player);
+        Assert.True(await host.ObjectUsed(new(_player, 1, 0)));
+        Assert.True(await host.RunCommand(_player, "station", []));
+        Assert.Equal(["placed", "used", "ran"], _player.Told);
+        uses = false;
+        await host.HideoutReady(_player);
+        Assert.False(await host.ObjectUsed(new(_player, 1, 0)));
+        Assert.False(await host.RunCommand(_player, "station", []));
+        Assert.Equal(3, _player.Told.Count);
+    }
+
     [Fact]
     public async Task Chat_runs_a_mod_command_that_none_of_ours_shadows()
     {
@@ -275,6 +500,8 @@ public sealed class ModHostTests : IDisposable
         public bool Hardcore => false;
         public bool SoloSelfFound => false;
         public bool Ruthless => false;
+        public string LeagueId { get; set; } = "standard";
+        public bool Uses(string module) => LeagueId == module;
         public int Level => 12;
         public string AreaId => "1_1_1";
         public uint Seed => 7;

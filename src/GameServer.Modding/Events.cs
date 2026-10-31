@@ -12,6 +12,26 @@ public sealed record MonsterInfo(string VarietyId, string Name, int Level, Monst
 /// <summary>A monster the player killed.</summary>
 public sealed record MonsterKill(IPlayer Player, MonsterInfo Monster);
 
+/// <summary>An option picked in an NPC's dialogue (an <c>NPCTalk</c> row).</summary>
+/// <param name="Player">Who picked it.</param>
+/// <param name="Npc">The NPC's name.</param>
+/// <param name="Category">The row's category: Gossip, Quests, QuestReward, BuyItems, SellItems …</param>
+/// <param name="Option">Its text.</param>
+/// <param name="Script">Its script.</param>
+/// <param name="HasText">It has text and audio to play.</param>
+/// <param name="Index">Its index among the NPC's options.</param>
+/// <param name="Row">Its <c>NPCTalk</c> row.</param>
+/// <param name="OpensGuildHideouts">A SelectHideout row's choice of list.</param>
+/// <param name="RewardOffer">A QuestReward row's offer.</param>
+public sealed record NpcOption(IPlayer Player, string Npc, string Category, string Option, string Script, bool HasText, int Index, int Row,
+    bool OpensGuildHideouts, int? RewardOffer);
+
+/// <summary>What an area's first message carries for a module: terrain data, achievement sets.</summary>
+public sealed record AreaHeader(byte[]? Terrain, IReadOnlyList<byte>? AchievementSets);
+
+/// <summary>A click on an object: its id, and the connection's game seconds when the client asked (for walking there).</summary>
+public sealed record ObjectUse(IPlayer Player, uint ObjectId, double RequestedAt);
+
 /// <summary>A killed monster's drops, before they are rolled. The multipliers of several mods multiply.</summary>
 public sealed class DropRoll(IPlayer player, MonsterInfo monster)
 {

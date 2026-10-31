@@ -1,7 +1,7 @@
 namespace GameServer.Core.Accounts;
 
 /// <summary>Hardcore death rules for the pinned 3.29 client: ordinary challenge deaths stay in the same challenge,
-/// retaining SSF; Hardcore Ruthless is permanently dead. Stashes and account gold never migrate with a character.</summary>
+/// retaining SSF; a league form may make them permanent. Stashes and account gold never migrate with a character.</summary>
 public static class HardcoreDeathRules
 {
     public const string VoidLeague = "Void";
@@ -27,8 +27,8 @@ public static class HardcoreDeathRules
             throw new InvalidOperationException("The character no longer belongs to the ticket's league");
         return character with
         {
-            League = source.Ruthless ? VoidLeague : source.Ssf ? $"SSF {source.Base}" : source.Base,
-            HardcoreDeath = new(source.Name, atUtc, source.Ruthless),
+            League = source.PermanentDeath ? VoidLeague : source.DeathLeague ?? source.Parent ?? (source.Ssf ? $"SSF {source.Base}" : source.Base),
+            HardcoreDeath = new(source.Name, atUtc, source.PermanentDeath),
         };
     }
 

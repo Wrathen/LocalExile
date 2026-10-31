@@ -2,12 +2,12 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    sealed record DevEnemyHit(int Damage, string Mitigation, uint Life, uint Mana, uint ManaBefore,
+    internal sealed record DevEnemyHit(int Damage, string Mitigation, uint Life, uint Mana, uint ManaBefore,
         bool Blocked, int BlockChance, bool Suppressed, (int Chance, int Effect, bool Lucky, bool Unlucky) Suppression);
 
     // /hit and /spellhit are synthetic incoming enemy contacts. /blockhit can additionally block.
     // Admission, prior-history decision, pool mutation and recording are a single combat commit.
-    static bool TryDevEnemyHit(ClientState conn, DamageType type, int amount, bool block, bool spell, bool suppress,
+    internal static bool TryDevEnemyHit(ClientState conn, DamageType type, int amount, bool block, bool spell, bool suppress,
         out DevEnemyHit hit, bool ranged = false)
     {
         lock (conn.Monsters)

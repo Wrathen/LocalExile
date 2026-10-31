@@ -42,17 +42,19 @@ sealed class GemVendorStock(ItemCatalog items, QuestRewardCatalog rewards, NpcCa
 
     /// <summary>The NPC's gem stock at character level/quest state: BaseItemTypes rows, in row order. Empty before the
     /// character has completed a quest that offers gems (or when Lilly/Siosa's own unlock is missing).</summary>
-    public IReadOnlyList<int> Stock(string npcId, int classRow, IReadOnlySet<string> flags, bool ruthless = false, int level = 100)
+    public IReadOnlyList<int> Stock(string npcId, int classRow, IReadOnlySet<string> flags, bool hardMode = false, int level = 100, LeagueRules? rules = null)
     {
         bool lilly = npcId.EndsWith("/Lilly", StringComparison.OrdinalIgnoreCase)
             || npcId.EndsWith("/Lilly2", StringComparison.OrdinalIgnoreCase);
         bool siosa = npcId.EndsWith("/Siosa", StringComparison.OrdinalIgnoreCase);
         if ((lilly && !flags.Contains(LillyUnlock)) || (siosa && !flags.Contains(SiosaUnlock))) return [];
-        // Siosa exchanges an Uncarved Gemstone for an active gem. Other Ruthless vendors sell no gems.
-        if (ruthless)
-            return !siosa ? [] : [.. sellable.Intersect(RuthlessGemRows(folder)).Where(row => items.Row(row) is { } type
-                && RuthlessGemRules.AllowsBase(type.Id)
-                && items.Gem(type) is { IsSupport: false, Variants.Count: > 0 } gem
+        rules ??= LeagueRules.Standard;
+        if (!rules.SellsGemsAt(npcId)) return [];
+        // The HardMode index lists what its vendor exchanges.
+        if (hardMode)
+            return [.. sellable.Intersect(HardModeGemRows(folder)).Where(row => items.Row(row) is { } type
+                && rules.AllowsGemBase(type.Id)
+                && items.Gem(type) is { Variants.Count: > 0 } gem && (rules.SellsSupportGems || !gem.IsSupport)
                 && skills.PlayerLevelReq(gem.Variant(0).Effect, 1) <= level).Order()];
         bool ignoreClass = lilly || siosa;
         var available = npcs.AvailableRewards(flags);
@@ -77,7 +79,7 @@ sealed class GemVendorStock(ItemCatalog items, QuestRewardCatalog rewards, NpcCa
         return [.. rows];
     }
 
-    static IReadOnlySet<int> RuthlessGemRows(string folder)
+    static IReadOnlySet<int> HardModeGemRows(string folder)
     {
         using var index = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(folder, "tables/IndexableSkillGems.json")));
         using var gems = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(Path.Combine(folder, "tables/SkillGems.json")));

@@ -5,12 +5,12 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static bool UsesProjectileRuntime(int effect) => Skills.IsProjectile(effect)
+    internal static bool UsesProjectileRuntime(int effect) => Skills.IsProjectile(effect)
         || ProjectileDefinition(Skills.EffectId(effect) ?? "") is not null;
 
     // Validate adopted paths before accepting an action, spending mana or reserving a cooldown.
     // Release still resolves again: equipment/stats may change during the ordinary cancellable windup.
-    static bool ProjectilePathAvailable(string remote, ClientState conn, ushort skillId, int effect)
+    internal static bool ProjectilePathAvailable(string remote, ClientState conn, ushort skillId, int effect)
     {
         if (!UsesProjectileRuntime(effect)) return true;
         try
@@ -35,7 +35,7 @@ partial class Program
         }
     }
 
-    static Task ScheduleGemProjectile(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static Task ScheduleGemProjectile(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         ushort skillId, (ushort Id, int Effect, string Name, int Level, int Quality, uint Gem) gem,
         (int X, int Y) aim, int action, int recoveryGeneration, CooldownUseTicket? ticket, SkillCriticalRoll criticalRoll)
     {
@@ -62,7 +62,7 @@ partial class Program
         return Task.CompletedTask;
     }
 
-    static ProjectileUse CaptureGemProjectile(ClientState conn, ProjectileSession session, ushort skillId,
+    internal static ProjectileUse CaptureGemProjectile(ClientState conn, ProjectileSession session, ushort skillId,
         (ushort Id, int Effect, string Name, int Level, int Quality, uint Gem) gem, (int X, int Y) aim, SkillCriticalRoll criticalRoll)
     {
         var player = CharacterPlayerStats(conn);

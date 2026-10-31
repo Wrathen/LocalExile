@@ -47,7 +47,15 @@ Part of [Status](../Status.md); what to build next in this area is in
 - Mods: the Gateway loads each `Mods/Binaries/<id>/` (a `mod.json` and an assembly, after the mods it depends on) into a
   collectible load context of its own and reloads it, with its dependents, when its folder changes; `/mod`, `/mod_reload`,
   `/mod_enable` and `/mod_disable` in chat (the last two last across restarts, in `mod-state.txt`).
-  `Mods/Source/` has six examples; only `example` is on by default.
+  Loose `.cs` files in a mod's folder compile with Roslyn when it loads, so saving one reloads it; errors go to `/mod`, the log and chat.
+  Live: a script saved into a running Gateway's `Mods/Binaries/` loaded, and a broken edit reported its line.
+  Leagues ([modules](../docs/dev/modules.md)) are folders in `Leagues/`, read once at start: cards and check boxes as in the real create screen, a parent to migrate to, Void, and
+  modules listed per league, with `Modules/Core/` by default. Characters of a deleted or ended league cannot be entered.
+  Not tried in the client: a blocked character.
+  Harvest, Heist and Delve are real modules with their own assemblies, which hot-reload, through `IPlayerWorld`.
+  Trades and parties, Atlas passives, the crafting bench, cosmetics, vendors, portals and the map device, tattoos, Mercy Mission, quest objects, hideout editing, chat commands and unique belts are Core modules too. What an NPC's options do is the `npcdialogue` module. A module runs only for the players whose league lists it, so a hideout
+  without Harvest places no station. Not tried in the client after the move.
+  `Mods/Source/` has six examples, of which only `example` is on by default.
   Mods see only `GameServer.Modding`: chat commands, the player tick, client messages (a mod may take one), area
   generated, monster killed, and drop, experience and stat modifiers; a mod that throws is logged and skipped.
   `live.ps1` builds `Mods\Source\` (the example mod: 100x item quantity, `/example`) into `Mods\Binaries\`.
@@ -57,8 +65,11 @@ Part of [Status](../Status.md); what to build next in this area is in
   context being freed.
   Assemblies load from a private temporary disk copy rather than collectible memory streams; original build outputs
   remain free, and collected contexts release their copied files. Loader and cleanup regressions cover this path.
-  Missing: catalog overrides, and the hooks not yet tried with the client (drops, experience, stats, packets).
-  Code: `src/GameServer.Modding/`, `ModHost.cs`, `ModLoadContext.cs`, `Program.Mods.cs`, `Mods/Source/`.
+  Unit-tested as well: scripts (load, reload, compile errors, no server references, dependencies, unload), league modules
+  (fallback, required features, tunables, scoped hooks) and built-ins.
+  Missing: mods replacing catalog rows, and the hooks not yet tried with the client (drops, experience, stats, packets).
+  Code: `src/GameServer.Modding/`, `ModHost.cs`, `ModLoadContext.cs`, `ModScripts.cs`, `ServerLeagues.cs`, `Program.Mods.cs`,
+  `Program.ModuleWorld.cs`, `Modules/`, `Mods/Source/`.
   Docs: [modding](../docs/dev/modding.md).
 
 - Read-only passive graph tooling exports pinned 3.29.3b topology and a merged PSG as `data/` analysis artifacts.

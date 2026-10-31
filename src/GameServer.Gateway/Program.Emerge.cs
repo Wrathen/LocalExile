@@ -9,7 +9,7 @@ partial class Program
 
     // Starts the connection's emerge watch for a monster just created waiting to rise (SpawnMonster), unless it already
     // runs.
-    static void WatchBuried(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static void WatchBuried(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         bool start;
         lock (conn.Monsters) start = MonsterEmerge.StartWatch(conn);
@@ -22,7 +22,7 @@ partial class Program
     // has played (game time) 0x1ac ends the action; meanwhile it is busy, so the AI only chases and attacks after it.
     // Rising does not wait for the AI (/ai off still lets a /spawn_mob emerge monster rise next to the player); it waits
     // while the game is paused or the player is dead.
-    static async Task RunEmergeWatch(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunEmergeWatch(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         try
         {
@@ -49,7 +49,7 @@ partial class Program
         }
     }
 
-    static async Task Emerge(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
+    internal static async Task Emerge(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
         SpawnedMonster m, (int X, int Y) at, double seconds)
     {
         if (Emerges.SkillId is not ushort skill || m.Variety is not { } v) return;

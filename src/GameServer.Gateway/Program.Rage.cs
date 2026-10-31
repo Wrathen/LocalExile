@@ -5,15 +5,15 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    sealed record RageTransfer(string Character, DateTime At, RageState.Carried State);
-    static readonly ConcurrentDictionary<uint, RageTransfer> CarriedRage = new();
+    internal sealed record RageTransfer(string Character, DateTime At, RageState.Carried State);
+    internal static readonly ConcurrentDictionary<uint, RageTransfer> CarriedRage = new();
 
-    static int RageStat(IReadOnlyDictionary<uint, int> stats, string name) =>
+    internal static int RageStat(IReadOnlyDictionary<uint, int> stats, string name) =>
         Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
 
     // Called after raw character/utility inputs and before attack damage/panel calculations. Derived values are
     // authoritative: setting current_rage cannot create resources or bypass gain prevention.
-    static void WithRage(ClientState conn, Dictionary<uint, int> stats)
+    internal static void WithRage(ClientState conn, Dictionary<uint, int> stats)
     {
         lock (conn.Monsters)
         {
@@ -27,7 +27,7 @@ partial class Program
     }
 
     // Only accepted contacts call these, in the same Monsters critical section as life mutation, before any await.
-    static bool RageOnHitLocked(ClientState conn, bool attack, bool melee, bool critical,
+    internal static bool RageOnHitLocked(ClientState conn, bool attack, bool melee, bool critical,
         IReadOnlyDictionary<uint, int>? own = null, Random? random = null)
     {
         if (conn.Character is null || conn.Closed || conn.LeavingArea || conn.RageRetired
@@ -40,7 +40,7 @@ partial class Program
             soulGainPrevention: Get("has_soul_gain_prevention") != 0);
     }
 
-    static void RageWhenHitLocked(ClientState conn)
+    internal static void RageWhenHitLocked(ClientState conn)
     {
         if (conn.RageRetired || conn.Closed || conn.LeavingArea || conn.Paused) return;
         if (conn.PlayerLife == 0) { conn.Rage.Clear(); return; }
@@ -97,7 +97,7 @@ partial class Program
     }
 
     // Called only by RagePresentation under the send gate and state lock; no send or reconciliation recursion.
-    static byte[] RageSnapshot(ClientState conn, RagePrepared? prepared = null)
+    internal static byte[] RageSnapshot(ClientState conn, RagePrepared? prepared = null)
     {
         var stats = CharacterPlayerStats(conn);
         var inputs = RageStats.Inputs(name => RageStat(stats, name));
@@ -176,7 +176,7 @@ partial class Program
         return Send(remote, stream, ciphers, [], null, atGate: () => RagePresentation(conn, prepared));
     }
 
-    static async Task RunRage(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunRage(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         try
         {

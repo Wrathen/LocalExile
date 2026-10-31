@@ -12,7 +12,7 @@ partial class Program
     /// <paramref name="player"/> is the character's final stats; <paramref name="own"/> a selected attack gem's own
     /// stats, whose flat/increased accuracy and critical increases join as they do for the main hand.
     /// </summary>
-    static List<(string Stat, int Value)>? OffHandPanelStats(ClientState conn, IReadOnlyDictionary<uint, int> player,
+    internal static List<(string Stat, int Value)>? OffHandPanelStats(ClientState conn, IReadOnlyDictionary<uint, int> player,
         IReadOnlyDictionary<string, int> mainLocal, IReadOnlyDictionary<string, int> offLocal,
         int mainHandAttackSpeedPct, IReadOnlyDictionary<uint, int>? own = null, int effect = -1)
     {
@@ -52,7 +52,7 @@ partial class Program
 
     /// <summary>The off hand's twelve damage rows for a selected attack gem: the same supported hit swung with the
     /// off-hand weapon, every type written (zero clears a type the conversion no longer deals).</summary>
-    static IEnumerable<(string Stat, int Value)> OffHandDamageRows(DamagePacket hit)
+    internal static IEnumerable<(string Stat, int Value)> OffHandDamageRows(DamagePacket hit)
     {
         var ranges = PanelStats.HandDamage(hit, "off_hand").ToDictionary(r => r.Stat, r => r.Value);
         foreach (string stat in PanelStats.DamageRows("off_hand")) yield return (stat, ranges.GetValueOrDefault(stat));

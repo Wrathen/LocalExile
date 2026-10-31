@@ -22,14 +22,14 @@ public class HeistLockerTests
         foreach (var hideout in hideouts)
         {
             var scene = HideoutScene.Build(hideout, fallback, null);
-            var locker = Assert.IsType<HideoutCatalog.Doodad>(scene.Heist);
-            Assert.Equal(HideoutCatalog.HeistLockerType, locker.Type);
+            var locker = scene.SmallStation;
             Assert.True(locker.X > 0 && locker.Y > 0);
             Assert.NotEqual((scene.Stash.X, scene.Stash.Y), (locker.X, locker.Y));
-            Assert.NotEqual((scene.Harvest.X, scene.Harvest.Y), (locker.X, locker.Y));
+            Assert.NotEqual(scene.LargeStation, (locker.X, locker.Y));
             var restored = HideoutEditing.Apply(scene,
                 new Dictionary<string, HideoutPlacement> { ["heist-locker"] = new(101, 202, 1.5f) });
-            Assert.Equal((101, 202, 1.5f), (restored.Heist!.X, restored.Heist.Y, restored.Heist.Rotation));
+            Assert.Equal((101, 202, 1.5f), restored.Station(GameServer.Modding.HideoutSlot.Small, "heist-locker"));
+            Assert.Equal((locker.X, locker.Y, 0f), restored.Station(GameServer.Modding.HideoutSlot.Small, "not-moved"));
             Assert.Equal(scene.Stash, restored.Stash);
             Assert.Equal(scene.Npcs, restored.Npcs);
         }

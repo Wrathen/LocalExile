@@ -23,7 +23,7 @@ partial class Program
     };
 
     /// <summary>Rows by name where the name is theirs alone, else by Id (the lookups take either); the other as detail.</summary>
-    static IEnumerable<(string Value, string Detail)> Named<T>(IEnumerable<T> rows, Func<T, string> name, Func<T, string> id)
+    internal static IEnumerable<(string Value, string Detail)> Named<T>(IEnumerable<T> rows, Func<T, string> name, Func<T, string> id)
     {
         var list = rows.Where(r => name(r).Length > 0).ToList();
         var counts = list.GroupBy(name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -32,7 +32,7 @@ partial class Program
     }
 
     /// <summary>How the Gateway lays an area out: it generates it, a walk-map capture has it, or only the client can.</summary>
-    static string AreaSupport(string id) =>
+    internal static string AreaSupport(string id) =>
         ServerLevels.IsSupported(id) ? "server-built"
         : Directory.Exists(Path.Combine("data", "walkability"))
             && Directory.EnumerateFiles(Path.Combine("data", "walkability"), $"{id}_seed*.bin").Any(f => !f.EndsWith(".projectile.bin", StringComparison.Ordinal))

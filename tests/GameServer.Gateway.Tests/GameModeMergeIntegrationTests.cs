@@ -18,7 +18,7 @@ public sealed class GameModeMergeIntegrationTests : IDisposable
         characters.Add(name);
         var conn = new ClientState(new(ushort.MaxValue, "mode-merge", 300, 300, 10, 10, null, []), 1, 1)
         {
-            Character = name, ClassRow = SkillCatalog.WitchRow, Ruthless = ruthless, Ssf = ssf, Hardcore = hardcore,
+            Character = name, ClassRow = SkillCatalog.WitchRow, LeagueForm = ruthless ? "ruthless" : null, Ssf = ssf, Hardcore = hardcore,
             League = ruthless ? "Ruthless" : "Standard", Instance = instance ?? new(),
             PlayerSent = true, PlayerLife = 100, PlayerMana = 100,
         };
@@ -53,7 +53,7 @@ public sealed class GameModeMergeIntegrationTests : IDisposable
             true, int.MaxValue, 0, 150, "mode merge")));
         var flight = Assert.Single(runtime.Session.Runtime.Projectiles);
         var random = new Random(unchecked(flight.Use.Seed * 397 ^ (int)flight.Id) ^ 0x5e418ac3);
-        var balance = ruthless ? Program.RuthlessSettings.Current : null;
+        var balance = ruthless ? ServerLeagues.Live("ruthless") : null;
         var expected = Program.DropsFor(conn).Roll(40, target.Rarity, random, 0,
             balance?.ItemDropMultiplier ?? 1, balance?.EquipmentRarityMultiplier ?? 1).ToList();
         if (Program.DropsFor(conn).Gold(40, target.Rarity, random, balance?.GoldMultiplier ?? 1) is { } gold)
@@ -64,7 +64,7 @@ public sealed class GameModeMergeIntegrationTests : IDisposable
         Assert.True(target.Dead);
         Assert.Equal(before + xp, conn.Experience);
         double carry = 0;
-        int gemXp = ruthless ? RuthlessGameplay.GemExperience(xp, balance!.GemExperienceMultiplier, ref carry)
+        int gemXp = ruthless ? LeagueGameplay.GemExperience(xp, balance!.GemExperienceMultiplier!.Value, ref carry)
             : (int)(xp / 10);
         var inventory = PlayerInventories.For(conn.Character!, catalog);
         Assert.Equal(gemXp, Assert.Single(inventory.Items(PlayerInventories.Weapon1), i => i.Id == host.Id)

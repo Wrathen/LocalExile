@@ -5,11 +5,11 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    sealed record SoulTransfer(string Character, DateTime At, VaalSoulState.Carried State);
-    static readonly ConcurrentDictionary<uint, SoulTransfer> CarriedVaalSouls = new();
+    internal sealed record SoulTransfer(string Character, DateTime At, VaalSoulState.Carried State);
+    internal static readonly ConcurrentDictionary<uint, SoulTransfer> CarriedVaalSouls = new();
 
     // Only the proved native getter inputs are projected. Explicit development values win, including zero.
-    static int VaalSoulInput(ClientState conn, IReadOnlyDictionary<uint, int> player,
+    internal static int VaalSoulInput(ClientState conn, IReadOnlyDictionary<uint, int> player,
         IReadOnlyDictionary<uint, int> own, string name)
     {
         if (Stats.Key(name) is not uint key) return 0;
@@ -22,7 +22,7 @@ partial class Program
         }
     }
 
-    static void PublishVaalSoulInputs(ClientState conn, IReadOnlyDictionary<uint, int> player,
+    internal static void PublishVaalSoulInputs(ClientState conn, IReadOnlyDictionary<uint, int> player,
         IReadOnlyDictionary<uint, int> own, Dictionary<uint, int> stats)
     {
         foreach (string name in VaalSoulCost.Inputs)
@@ -39,7 +39,7 @@ partial class Program
             var player = CharacterPlayerStats(conn);
             var requirements = CurrentGemRequirements(conn);
             var sources = new List<(uint, uint)>();
-            foreach (var gem in GemSkillEffectsAt(conn.Character, requirements.Places, requirements.Inactive, conn.Ruthless))
+            foreach (var gem in GemSkillEffectsAt(conn.Character, requirements.Places, requirements.Inactive, LeagueFor(conn)))
             {
                 if (SkillsFor(conn).VaalBudget(gem.Effect, gem.Level) is null) continue;
                 var supported = SupportedSkillAt(conn, gem.Id, requirements);
@@ -56,7 +56,7 @@ partial class Program
 
     // Called with Life=0/Dead=true in the SAME Monsters section as the lethal mutation, before notification awaits.
     // Shared hit paths do not carry an object ID; resolve actual ownership here without accepting another recipient.
-    static void CollectVaalSoulAtDeathLocked(ClientState conn, SpawnedMonster monster) =>
+    internal static void CollectVaalSoulAtDeathLocked(ClientState conn, SpawnedMonster monster) =>
         CollectVaalSoulOnKill(conn, conn.Monsters.FirstOrDefault(kv => ReferenceEquals(kv.Value, monster)).Key, monster);
 
     // Consume ineligible deaths too. Notifications may only publish current state; they never call this method.
@@ -80,7 +80,7 @@ partial class Program
 
     // Native UPDATE clamps against OLD capacity. Unknown rows and increases must seed first, then restore current.
     // Empty lists preserve native entries, so every removed row needs an explicit zero update.
-    static (VaalSoulSeed[] Seeds, VaalSoulUpdate[] Updates) VaalSoulChanges(ClientState conn)
+    internal static (VaalSoulSeed[] Seeds, VaalSoulUpdate[] Updates) VaalSoulChanges(ClientState conn)
     {
         RefreshVaalSouls(conn);
         var current = conn.VaalSouls.Read().ToDictionary(b => b.ActiveSkillsRow);
@@ -99,7 +99,7 @@ partial class Program
         return ([.. seeds], [.. updates]);
     }
 
-    static byte[] PlayerSkillsWithVaalSouls(ClientState conn, IReadOnlyList<GrantedSkill> skills,
+    internal static byte[] PlayerSkillsWithVaalSouls(ClientState conn, IReadOnlyList<GrantedSkill> skills,
         IReadOnlyList<ushort> gone)
     {
         var changes = VaalSoulChanges(conn);

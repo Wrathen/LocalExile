@@ -1,0 +1,15 @@
+{
+  "name": "Ruthless",
+  "parent": "Standard",
+  "base": "Standard",
+  "hardcore": false,
+  "ssf": false,
+  "form": "ruthless",
+  "entryOf": "Standard",
+  "entryKind": "form",
+  "description": "Ruthless: extreme item scarcity.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

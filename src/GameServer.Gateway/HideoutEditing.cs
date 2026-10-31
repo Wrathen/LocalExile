@@ -8,6 +8,9 @@ sealed class HideoutEditing
     public sealed record Entry(string Key, HideoutPlacement Position, int BlockerSize, double? CollisionRadius = null);
     readonly Dictionary<uint, Entry> _objects = [];
 
+    /// <summary>Where a registered object stands now.</summary>
+    public HideoutPlacement? PositionOf(uint id) => _objects.GetValueOrDefault(id)?.Position;
+
     public void Register(uint id, string key, int x, int y, float rotation, int size, double? collisionRadius = null) =>
         _objects[id] = new(key, new(x, y, rotation), size, collisionRadius);
 
@@ -39,9 +42,9 @@ sealed class HideoutEditing
         var guild = saved.TryGetValue("guild-stash", out var g) ? (g.X, g.Y) : scene.Guild;
         return scene with
         {
-            Heist = scene.Heist is { } heist ? D("heist-locker", heist) : null,
+            Saved = saved,
             Stash = D("stash", scene.Stash), Guild = guild, Bench = D("bench", scene.Bench),
-            Harvest = D("harvest", scene.Harvest), Device = D("map-device", scene.Device),
+            Device = D("map-device", scene.Device),
             Npcs = [.. scene.Npcs.Select(n => saved.TryGetValue("npc:" + n.Id, out var p)
                 ? n with { X = p.X, Y = p.Y, Rotation = p.Rotation } : n)]
         };

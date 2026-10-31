@@ -1,0 +1,15 @@
+{
+  "name": "HC Ruthless Allflame",
+  "parent": "Ruthless Allflame",
+  "base": "Allflame",
+  "hardcore": true,
+  "ssf": false,
+  "form": "ruthless",
+  "entryOf": "Hardcore Allflame",
+  "entryKind": "form",
+  "description": "Plunder sunken treasures and harness the power of the Allflame. Ruthless: extreme item scarcity. A character killed moves to Ruthless Allflame.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

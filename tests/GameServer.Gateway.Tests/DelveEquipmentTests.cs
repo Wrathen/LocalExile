@@ -1,3 +1,5 @@
+using GameServer.Modding;
+using GameServer.Modules.Delve;
 using GameServer.Storage;
 
 namespace GameServer.Gateway.Tests;
@@ -40,19 +42,28 @@ public class DelveEquipmentTests
         string account = "DelveEquipment-" + Guid.NewGuid().ToString("N");
         string key = AccountStash.Key(account, "Standard");
         var stash = AccountStash.For(key, Program.Items);
-        Assert.True(stash.ChangeDelve(p => p with { Azurite = 100 }));
-        Assert.True(stash.ChangeDelve(p => DelveEquipment.UpgradeEquipment(p, 0)));
+        Assert.True(DelveModule.ChangeEquipment(Saved(stash), p => p with { Azurite = 100 }));
+        Assert.True(DelveModule.ChangeEquipment(Saved(stash), p => DelveEquipment.UpgradeEquipment(p, 0)));
         var saved = Saves.Load<AccountStash.Save>(SaveDatabase.Table.Stashes, key, CharacterSaves.Opts)!;
-        Assert.Equal(85u, saved.Delve!.Azurite); Assert.Equal(1, saved.Delve.Level(0));
-        Assert.Equal(0u, AccountStash.For(AccountStash.Key(account, "Hardcore"), Program.Items).Delve.Azurite);
+        var equipment = System.Text.Json.JsonSerializer.Deserialize<DelveProgress>(saved.ModuleData![DelveModule.EquipmentKey])!;
+        Assert.Equal(85u, equipment.Azurite); Assert.Equal(1, equipment.Level(0));
+        Assert.Equal(0u, DelveModule.Equipment(Saved(AccountStash.For(AccountStash.Key(account, "Hardcore"), Program.Items))).Azurite);
         try
         {
             Saves.FailWrite = k => k == key;
-            Assert.Throws<IOException>(() => stash.ChangeDelve(p => DelveEquipment.Purchase(p, true, 1)));
+            Assert.Throws<IOException>(() => DelveModule.ChangeEquipment(Saved(stash), p => DelveEquipment.Purchase(p, true, 1)));
         }
         finally { Saves.FailWrite = null; }
-        var reloaded = AccountStash.For(key, Program.Items).Delve;
+        var reloaded = DelveModule.Equipment(Saved(AccountStash.For(key, Program.Items)));
         Assert.Equal(85u, reloaded.Azurite); Assert.Equal(0, reloaded.Flares);
         Assert.Equal(1, reloaded.Level(0));
+    }
+
+    static ISavedData Saved(AccountStash stash) => new StashData(stash);
+
+    sealed class StashData(AccountStash stash) : ISavedData
+    {
+        public string? Get(string key) => stash.ModuleData(key);
+        public bool Change(string key, Func<string?, string?> change) => stash.ChangeModuleData(key, change);
     }
 }

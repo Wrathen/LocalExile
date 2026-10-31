@@ -148,7 +148,7 @@ sealed class InstanceDirectory(InstanceRegistry registry, AccountService? accoun
                     CharacterId = info.CharacterId,
                     Account = accounts?.FindCharacter(info.Character) is { } owner ? accounts.GetAccount(owner.AccountId)?.Name : null,
                     League = info.League?.Name, Hardcore = info.League?.Hardcore ?? false,
-                    Ssf = info.League?.Ssf ?? false, Ruthless = info.League?.Ruthless ?? false,
+                    Ssf = info.League?.Ssf ?? false, LeagueForm = info.League?.Form,
                     Class = (int)info.Class, Level = info.Level,
                     LastTown = accounts?.FindCharacter(info.Character)?.LastTown is { } last
                         && _towns.FirstOrDefault(t => t.Id == last) is { Id: not null } known ? known.Hash16 : (ushort)0,

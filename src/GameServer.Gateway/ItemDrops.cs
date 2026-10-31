@@ -15,8 +15,8 @@ using GameServer.Core.Protocol.Instance;
 ///    <see cref="UniqueWeight"/>, else rare), rare, magic or normal, in that order; magic, rare and unique items drop
 ///    unidentified, at the monster's level plus <see cref="ItemLevelBonus"/>.
 /// </summary>
-sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string folder = "data", bool ruthless = false, AtlasCatalog? maps = null,
-    UniqueCatalog? uniques = null, UniqueWeightProvider? uniqueWeights = null)
+sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string folder = "data", bool hardMode = false, AtlasCatalog? maps = null,
+    UniqueCatalog? uniques = null, UniqueWeightProvider? uniqueWeights = null, LeagueRules? league = null)
 {
     readonly UniqueWeightProvider _uniqueWeightProvider = uniqueWeights ?? UniqueWeightProvider.Default;
 
@@ -93,7 +93,7 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
     sealed record Pools(List<(ItemCatalog.BaseType Type, double Weight)> Currency,
         Dictionary<string, List<ItemCatalog.BaseType>> Equipment, List<ItemCatalog.BaseType> Flasks, List<ItemCatalog.BaseType> Gems);
 
-    private readonly Lazy<Pools> _pools = new(() => Build(catalog, folder, ruthless));
+    private readonly Lazy<Pools> _pools = new(() => Build(catalog, folder, hardMode, league));
 
     // The uniques by base type Id, for the catalogue they were built from (the database may replace it while running).
     sealed record UniqueIndex(IReadOnlyList<UniqueCatalog.Definition> From, Dictionary<string, List<UniqueCatalog.Definition>> ByBase);
@@ -103,7 +103,7 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
 
     /// <summary>The items a monster of this level and rarity drops (possibly none). The quantity multiplier scales how
     /// many: each of the monster's rolls happens floor(multiplier) times, and once more with the fraction's chance (below
-    /// 1, that chance alone: Ruthless's 0.2). The rarity multiplier scales every rarity chance, as increased rarity does.</summary>
+    /// 1, that chance alone: HardMode's 0.2). The rarity multiplier scales every rarity chance, as increased rarity does.</summary>
     public IReadOnlyList<Drop> Roll(int monsterLevel, MonsterRarity rarity, Random rng, int increasedRarity = 0,
         double quantityMultiplier = 1, double rarityMultiplier = 1)
     {
@@ -248,18 +248,18 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
     }
 
     /// <summary>How likely a unique is once its base rolled one: the inverse of its disenchant value
-    /// (VillageUniqueDisenchantValues, Ruthless has its own column), the client's own measure of how rare a unique is:
+    /// (VillageUniqueDisenchantValues, HardMode has its own column), the client's own measure of how rare a unique is:
     /// Wanderlust 1.06, Kaom's Heart 43, Mageblood 891. The table leaves out old names and some non-equipment; those do not
     /// drop. The Gateway publishes the seeded/overridden weights through <see cref="UniqueWeightProvider"/>; without a
     /// reference table the extracted JSON is the fallback and every unique weighs 1.</summary>
     internal double UniqueWeight(string name) =>
         _uniqueWeightProvider.HasTable
-            ? _uniqueWeightProvider.Weight(name, ruthless)
+            ? _uniqueWeightProvider.Weight(name, hardMode)
             : _uniqueWeightsFile.Value is { Count: > 0 } weights ? weights.GetValueOrDefault(name) : 1;
 
-    private readonly Lazy<Dictionary<string, double>> _uniqueWeightsFile = new(() => LoadUniqueWeights(folder, ruthless));
+    private readonly Lazy<Dictionary<string, double>> _uniqueWeightsFile = new(() => LoadUniqueWeights(folder, hardMode));
 
-    static Dictionary<string, double> LoadUniqueWeights(string folder, bool ruthless)
+    static Dictionary<string, double> LoadUniqueWeights(string folder, bool hardMode)
     {
         var weights = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         string values = Path.Combine(folder, "tables", "VillageUniqueDisenchantValues.json"), words = Path.Combine(folder, "tables", "Words.json");
@@ -268,7 +268,7 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
         using var valuesDoc = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(values));
         foreach (var row in valuesDoc.RootElement.EnumerateArray())
         {
-            double value = row.GetProperty(ruthless ? "RuthlessValue" : "Value").GetDouble();
+            double value = row.GetProperty(hardMode ? "RuthlessValue" : "Value").GetDouble();
             if (value > 0 && wordsDoc.RootElement[row.GetProperty("UniqueName").GetInt32()].GetProperty("Text").GetString() is { Length: > 0 } text)
                 weights[text] = Math.Min(1, 1 / value);
         }
@@ -288,7 +288,7 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
         return weighted[^1].Value;
     }
 
-    private static Pools Build(ItemCatalog catalog, string folder, bool ruthless)
+    private static Pools Build(ItemCatalog catalog, string folder, bool hardMode, LeagueRules? league)
     {
         var currency = new List<(ItemCatalog.BaseType, double)>();
         foreach (var (id, weight) in Currency)
@@ -309,7 +309,7 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
         var pool = GemSources.DropPool(catalog, folder);
         var gems = new List<ItemCatalog.BaseType>();
         foreach (int row in pool)
-            if (catalog.Row(row) is { DropLevel: >= 1 } type && (!ruthless || RuthlessGemRules.AllowsBase(type.Id)))
+            if (catalog.Row(row) is { DropLevel: >= 1 } type && (league?.AllowsGemBase(type.Id) != false))
                 gems.Add(type);
         return new(currency, equipment, flasks, gems);
     }

@@ -2,7 +2,7 @@ partial class Program
 {
     // Read raw sources rather than CharacterPlayerStats: reservation/pool calculations can already be resolving
     // this skill. A native developer replacement wins over the aggregate source, without feeding a derived level back.
-    static int EffectiveGemLevel(ClientState conn, GameServer.Core.Protocol.Instance.Item gem, int supportedBonus)
+    internal static int EffectiveGemLevel(ClientState conn, GameServer.Core.Protocol.Instance.Item gem, int supportedBonus)
     {
         int intrinsic = ItemsFor(conn).GemLevel(gem);
         var type = ItemsFor(conn).ByHash(gem.TypeHash);
@@ -15,11 +15,11 @@ partial class Program
     }
 
     // +% quality of all skill gems: active gems only, like the level stat.
-    static int GemQualityBonus(ClientState conn, GameServer.Core.Protocol.Instance.Item gem) =>
+    internal static int GemQualityBonus(ClientState conn, GameServer.Core.Protocol.Instance.Item gem) =>
         ItemsFor(conn).ByHash(gem.TypeHash) is { } type && ItemsFor(conn).Gem(type) is { IsSupport: false }
             ? RawGemStat(conn, SkillGemLevel.AllSkillGemQuality) : 0;
 
-    static int RawGemStat(ClientState conn, string stat)
+    internal static int RawGemStat(ClientState conn, string stat)
     {
         if (Stats.Key(stat) is not uint key) return 0;
         var sources = CharacterStatSources(conn).Stats;

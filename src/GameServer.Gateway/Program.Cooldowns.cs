@@ -4,12 +4,12 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    static SingleUseCooldown? CooldownFor(ClientState conn, int effect, int level, int quality) =>
+    internal static SingleUseCooldown? CooldownFor(ClientState conn, int effect, int level, int quality) =>
         SkillsFor(conn).CooldownMs(effect, level) <= 0 || GemSkillEffects(conn).Count(g => g.Effect == effect) != 1 ? null :
             SingleUseCooldown.ForSkill(SkillsFor(conn), Stats, effect, level, CharacterPlayerStats(conn),
                 SkillsFor(conn).EffectStats(effect, level, quality).ToDictionary(s => s.Item1, s => s.Item2));
 
-    static SingleUseCooldownState CooldownStateLocked(ClientState conn, int effect, SingleUseCooldown plan, double now)
+    internal static SingleUseCooldownState CooldownStateLocked(ClientState conn, int effect, SingleUseCooldown plan, double now)
     {
         if (!conn.SingleUseCooldowns.TryGetValue(effect, out var state))
         {
@@ -36,7 +36,7 @@ partial class Program
         TryBeginCooldownUseCore(conn, effect, plan, instant, sideEffects, out ticket,
             actionToken, reserve, requestedAt, skillId);
 
-    static bool TryBeginCooldownUseCore(ClientState conn, int effect, SingleUseCooldown? plan, bool instant,
+    internal static bool TryBeginCooldownUseCore(ClientState conn, int effect, SingleUseCooldown? plan, bool instant,
         Action sideEffects, out CooldownUseTicket? ticket, int? actionToken, bool reserve, double? requestedAt,
         ushort? skillId)
     {
@@ -68,7 +68,7 @@ partial class Program
         }
     }
 
-    static void RefreshSingleUseCooldowns(ClientState conn)
+    internal static void RefreshSingleUseCooldowns(ClientState conn)
     {
         lock (conn.Monsters) if (conn.SingleUseCooldowns.Count == 0) return;
         var player = CharacterPlayerStats(conn);
@@ -114,7 +114,7 @@ partial class Program
         }
     }
 
-    static Task SendNativeCooldownRefresh(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static Task SendNativeCooldownRefresh(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         lock (conn.Monsters)
             if (!conn.SingleUseCooldowns.Values.Any(s => s.NeedsNativeRefresh)) return Task.CompletedTask;

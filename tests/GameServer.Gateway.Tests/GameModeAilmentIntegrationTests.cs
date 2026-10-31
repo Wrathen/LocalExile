@@ -18,7 +18,7 @@ public sealed class GameModeAilmentIntegrationTests : IDisposable
         TestSaves.Ensure();
         string name = "ModeAilment" + Guid.NewGuid().ToString("N");
         characters.Add(name);
-        var mode = LeagueCatalog.Default.Find(league)!;
+        var mode = LeagueCatalog.FromEnvironment().Find(league)!;
         var character = new Character(Guid.NewGuid(), Guid.NewGuid(), name, CharacterClass.Witch, 1,
             league, "1_1_2", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
         new SqliteAccountStore(Saves.Db).AddCharacter(character);
@@ -26,7 +26,7 @@ public sealed class GameModeAilmentIntegrationTests : IDisposable
         var conn = new ClientState(new(ushort.MaxValue, "1_1_2", 300, 300, 10, 10, null, []), 1, 1)
         {
             Character = name, CharacterId = character.Id, ClassRow = SkillCatalog.WitchRow, League = league,
-            Hardcore = mode.Hardcore, Ssf = mode.Ssf, Ruthless = mode.Ruthless,
+            Hardcore = mode.Hardcore, Ssf = mode.Ssf, LeagueForm = mode.Form,
             PlayerLife = 1, PlayerMana = 1,
         };
         conn.Pools = Program.PoolsFor(conn, 1);

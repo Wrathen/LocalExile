@@ -8,11 +8,25 @@
     <!-- The game files and the level generator port (ServerLevels.cs). -->
     <ProjectReference Include="..\GameServer.Data\GameServer.Data.csproj" />
     <Compile Include="..\..\scripts\re\ggdump\NodeOodleDecoder.cs" Link="NodeOodleDecoder.cs" />
+    <!-- Compiles a mod's loose .cs files (ModScripts.cs). -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
   </ItemGroup>
 
   <!-- The Gateway's types are internal (top-level program); its tests reach them. -->
   <ItemGroup>
     <InternalsVisibleTo Include="GameServer.Gateway.Tests" />
+    <InternalsVisibleTo Include="hideoutediting" />
+    <InternalsVisibleTo Include="commands" />
+    <InternalsVisibleTo Include="vendors" />
+    <InternalsVisibleTo Include="portals" />
+    <InternalsVisibleTo Include="questobjects" />
+    <InternalsVisibleTo Include="uniquebelts" />
+    <InternalsVisibleTo Include="mercy" />
+    <InternalsVisibleTo Include="tattoos" />
+    <InternalsVisibleTo Include="cosmetics" />
+    <InternalsVisibleTo Include="bench" />
+    <InternalsVisibleTo Include="atlas" />
+    <InternalsVisibleTo Include="social" />
   </ItemGroup>
 
   <PropertyGroup>

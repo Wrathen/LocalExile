@@ -11,18 +11,18 @@ partial class Program
     // Endurance, Frenzy and Power charges (issue #237, 11-skills.md §15). Each connection has a ChargeSession: the combat
     // code enqueues what may grant charges (ChargesOnHit, ChargesOnKill, ChargesWhenHit) and RunCharges rolls, times,
     // expires and presents them. The charges held count in the character's stats through WithCharges.
-    static readonly ConditionalWeakTable<ClientState, ChargeSession> ChargeSessions = new();
+    internal static readonly ConditionalWeakTable<ClientState, ChargeSession> ChargeSessions = new();
 
     // The charges an area change hands on, by the destination's ticket (Transfer): kept with the duration they had left.
     // A ticket nobody connects with (a failed load) is forgotten after a few minutes.
-    static readonly ConcurrentDictionary<uint, (DateTime At, List<Charges.Carried> Charges)> CarriedCharges = new();
+    internal static readonly ConcurrentDictionary<uint, (DateTime At, List<Charges.Carried> Charges)> CarriedCharges = new();
 
-    static ChargeSession ChargesOf(ClientState conn) => ChargeSessions.GetValue(conn, _ => new ChargeSession());
+    internal static ChargeSession ChargesOf(ClientState conn) => ChargeSessions.GetValue(conn, _ => new ChargeSession());
 
     // A player hit on a monster that landed (Attack, AreaSkillHit, a projectile's impact): its "on hit", "on critical
     // strike" and "on non-critical strike" gains. effect: the gem skill's GrantedEffects row (-1: the default attack).
     // primary: the use's first target; once-per-use grants (the Frenzy gem) come only from it.
-    static void ChargesOnHit(ClientState conn, SpawnedMonster m, bool critical, bool spell, int effect = -1, int level = 1,
+    internal static void ChargesOnHit(ClientState conn, SpawnedMonster m, bool critical, bool spell, int effect = -1, int level = 1,
         int quality = 0, bool? melee = null, bool primary = true)
     {
         Func<string, int>? skill = null;
@@ -36,25 +36,25 @@ partial class Program
     }
 
     // The player died (PlayerDied): every gained charge goes now, not at the ticker's next step, which a pause holds back.
-    static void ChargesOnDeath(ClientState conn)
+    internal static void ChargesOnDeath(ClientState conn)
     {
         lock (conn.Monsters) ChargesOf(conn).Die();
     }
 
     // A hostile monster the player killed (MonsterKilled): its "on kill" gains.
-    static void ChargesOnKill(ClientState conn, SpawnedMonster m)
+    internal static void ChargesOnKill(ClientState conn, SpawnedMonster m)
     {
         if (conn.PlayerLife > 0) ChargesOf(conn).Enqueue(new ChargeEvent.Kill(m.Rarity));
     }
 
     // A monster's hit on the player that landed (when hit) or was blocked (on block).
-    static void ChargesWhenHit(ClientState conn, bool blocked, bool spell = false) =>
+    internal static void ChargesWhenHit(ClientState conn, bool blocked, bool spell = false) =>
         ChargesOf(conn).Enqueue(blocked ? new ChargeEvent.Block(spell) : new ChargeEvent.WhenHit());
 
     // Transfer: the charges go with the player to the area of the new ticket.
     // Whether the official server keeps charges across areas is not documented (poewiki's Charge page says nothing about
     // it); this one call is the rule. A dead player carries nothing (Resurrect in Town changes area while dead).
-    static void CarryCharges(ClientState conn, uint ticket)
+    internal static void CarryCharges(ClientState conn, uint ticket)
     {
         List<Charges.Carried> carried;
         lock (conn.Monsters)
@@ -69,7 +69,7 @@ partial class Program
 
     // The character's stat sources with its charges (CharacterStatSources): Character.ot's per-charge stats, what the
     // charges held add (ChargeEffects.Expand) and their counts for the panel and the buffs.
-    static Dictionary<uint, int> WithCharges(ClientState conn, Dictionary<uint, int> sources)
+    internal static Dictionary<uint, int> WithCharges(ClientState conn, Dictionary<uint, int> sources)
     {
         var stats = new Dictionary<uint, int>(sources);
         foreach (var (stat, value) in ChargeEffects.Inherent)
@@ -107,11 +107,11 @@ partial class Program
     }
 
     // The more multiplier of the charges on a hit (AttackHit, SpellDamage) or a burn, from the final stats.
-    static double ChargeDamageMore(IReadOnlyDictionary<uint, int> stats, bool spell = false) =>
+    internal static double ChargeDamageMore(IReadOnlyDictionary<uint, int> stats, bool spell = false) =>
         ChargeEffects.DamageMore(name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0, spell);
 
     // The player's additional physical and elemental damage reduction (Endurance Charges, passives) for hits taken.
-    static (int Physical, int Elemental) PlayerDamageReduction(ClientState conn,
+    internal static (int Physical, int Elemental) PlayerDamageReduction(ClientState conn,
         IReadOnlyDictionary<uint, int>? stats = null)
     {
         stats ??= CharacterPlayerStats(conn);
@@ -120,7 +120,7 @@ partial class Program
 
     // A hit's damage taken after the player's mitigation (the dev /hit commands, MonsterSwing's rules): physical through
     // armour plus additional physical reduction; the other types take resistance before the shared hit-only pass.
-    static int MitigateTaken(ClientState conn, DamageType type, int amount, int resistance, int maxResistance)
+    internal static int MitigateTaken(ClientState conn, DamageType type, int amount, int resistance, int maxResistance)
     {
         lock (conn.Monsters)
         {
@@ -134,7 +134,7 @@ partial class Program
         }
     }
 
-    static int MitigateTakenWithArmour(ClientState conn, DamageType type, int amount, int resistance, int maxResistance,
+    internal static int MitigateTakenWithArmour(ClientState conn, DamageType type, int amount, int resistance, int maxResistance,
         int effectiveArmour, IReadOnlyDictionary<uint, int> stats)
     {
         var reduction = PlayerDamageReduction(conn, stats);
@@ -145,7 +145,7 @@ partial class Program
     }
 
     // What MitigateTaken applied, for the dev commands' replies: armour or resistance, and the additional reduction.
-    static string MitigationLabel(ClientState conn, DamageType type, int amount, int resistance, int maxResistance,
+    internal static string MitigationLabel(ClientState conn, DamageType type, int amount, int resistance, int maxResistance,
         int effectiveArmour, IReadOnlyDictionary<uint, int> stats)
     {
         var (physical, elemental) = PlayerDamageReduction(conn, stats);
@@ -162,13 +162,13 @@ partial class Program
     // (endurance_charge_granted_per_X_monster_power_during_endurance_warcry) of the hostile monsters within its radius
     // (Path of Building: 60, grown by area of effect; power 1 normal, 2 magic, 10 rare, 20 unique), when its cast is over.
     // True when the skill was one of these.
-    static bool UseChargeSkill(ClientState conn, int effect, int level, int quality, (int X, int Y) at)
+    internal static bool UseChargeSkill(ClientState conn, int effect, int level, int quality, (int X, int Y) at)
         => UseChargeSkillCore(conn, effect, SkillsFor(conn).EffectStats(effect, level, quality).ToDictionary(kv => kv.Item1, kv => kv.Item2));
 
-    static bool UseChargeSkillInstance(ClientState conn, ushort skillId, int effect, int level, int quality, (int X, int Y) at)
+    internal static bool UseChargeSkillInstance(ClientState conn, ushort skillId, int effect, int level, int quality, (int X, int Y) at)
         => SkillsFor(conn).EffectId(effect) == "EnduringCry" && UseChargeSkillCore(conn, effect, SupportedSkill(conn, skillId).Stats);
 
-    static bool UseChargeSkillCore(ClientState conn, int effect, IReadOnlyDictionary<uint, int> own)
+    internal static bool UseChargeSkillCore(ClientState conn, int effect, IReadOnlyDictionary<uint, int> own)
     {
         if (SkillsFor(conn).EffectId(effect) != "EnduringCry") return false;
         int Own(string name) => Stats.Key(name) is uint key ? own.GetValueOrDefault(key) : 0;
@@ -214,7 +214,7 @@ partial class Program
     }
 
     // Path of Building's EnduringCry radius (skill("radius", 60)); one unit is one cell.
-    const int EnduringCryRadius = 60;
+    internal const int EnduringCryRadius = 60;
 
     // A monster's warcry power (Path of Building's ConfigOptions): normal 1, magic 2, rare 10, unique 20.
     internal static int WarcryPower(MonsterRarity rarity) => rarity switch
@@ -230,7 +230,7 @@ partial class Program
     // counts the stats use changed, the pools, the walk speed and the stats (SendChargeStats). The character's stats are
     // worked out outside the Monsters lock, and only while events wait (their gain chances); the limits come with every
     // stats change (ChargeSession.Observe through WithCharges).
-    static async Task RunCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var session = ChargesOf(conn);
         if (CarriedCharges.TryRemove(conn.Ticket, out var entry) && entry.Charges is var carried)
@@ -293,7 +293,7 @@ partial class Program
     // The stats after a charge count changed: 0x1b3 and the skills' stats (the client swings and casts with the speed in
     // its skill records), without SendSkills' skill-bar work (no skill came or went). A changed skill set (a gem moved at
     // the same moment) takes the full SendCharacterStats.
-    static async Task SendChargeStats(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task SendChargeStats(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         if (conn.Closed || conn.LeavingArea || conn.RageRetired) return;
         var skills = PlayerSkills(conn);
@@ -310,12 +310,12 @@ partial class Program
         await SendPlayerEnergyShield(remote, stream, ciphers, conn);
     }
 
-    const string ChargesUsage = "/charges [endurance|frenzy|power <count>] | /charges add <type> [count] | /charges clear " +
+    internal const string ChargesUsage = "/charges [endurance|frenzy|power <count>] | /charges add <type> [count] | /charges clear " +
         "(dev: the charges held, their maximum, minimum and time left; set, gain or clear them)";
 
     // /charges: shows the charges, or sets (no refresh roll), gains (as a skill would: refreshes, can reach the maximum
     // chance) or clears them. The ticker applies the change within a step.
-    static async Task ChargesCommand(ClientState conn, string[] args)
+    internal static async Task ChargesCommand(ClientState conn, string[] args)
     {
         var session = ChargesOf(conn);
         if (args.Length == 0)

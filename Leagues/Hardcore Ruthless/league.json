@@ -1,0 +1,15 @@
+{
+  "name": "Hardcore Ruthless",
+  "parent": "Ruthless",
+  "base": "Standard",
+  "hardcore": true,
+  "ssf": false,
+  "form": "ruthless",
+  "entryOf": "Hardcore",
+  "entryKind": "form",
+  "description": "Ruthless: extreme item scarcity. A character killed moves to Ruthless.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

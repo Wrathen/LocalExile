@@ -18,7 +18,7 @@ partial class Program
     // its back to spit (`action_should_face_away_from_target`, with `projectile_uses_contact_position`, the spread and
     // minimum range from the stat set). The attack's numbers win on a shared key; the effect's cast-time and mana-cost
     // entries, which an attack action does not use, stay out.
-    static readonly string[] MonsterSkillStatsNotSent =
+    internal static readonly string[] MonsterSkillStatsNotSent =
         ["base_spell_cast_time_ms", "virtual_base_spell_cast_time_ms", "hundred_times_casts_per_second", "base_mana_cost", "mana_cost"];
 
     internal static IReadOnlyList<(uint, int)> MonsterProjectileSkillStats(ClientState conn, int effect, int level, MonsterAttack attack)
@@ -156,7 +156,7 @@ partial class Program
     // The area's monsters, once the player is in (Agents/docs/protocol/14-monster-packs.md): MonsterPacks scattered over the
     // walk map, the room points' packs and the unique boss at "mapboss" (AreaPopulation). Towns have none; neither does an
     // area without a walk map. Game_MONSTERS=0 turns it off.
-    static async Task PopulateArea(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task PopulateArea(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var layout = conn.Layout;
         if (Environment.GetEnvironmentVariable("Game_MONSTERS") == "0") return;
@@ -349,7 +349,7 @@ partial class Program
         conn.Performance.MaybeLog(remote);
     }
 
-    static async Task RunPlannedMonsterSwing(string remote, NetworkStream stream, ConnectionCiphers ciphers,
+    internal static async Task RunPlannedMonsterSwing(string remote, NetworkStream stream, ConnectionCiphers ciphers,
         ClientState conn, MonsterAiCadence cadence, uint id, SpawnedMonster m, int action)
     {
         try { await MonsterSwing(remote, stream, ciphers, conn, id, m, action); }
@@ -367,7 +367,7 @@ partial class Program
     // death.
     // PoE's evasion entropy (wiki: Evasion): shared by every attack against the player, reset after 3.33 s. Call under
     // the Monsters lock.
-    static bool EvadesLocked(ClientState conn, int hitChance, double now)
+    internal static bool EvadesLocked(ClientState conn, int hitChance, double now)
     {
         if (conn.EvasionEntropy < 0 || now - conn.LastEvasionAt > 3.33)
             conn.EvasionEntropy = conn.IncomingHitRandom.Next(100);
@@ -387,7 +387,7 @@ partial class Program
                 && m.ActionGeneration == action && conn.Clock.Elapsed.TotalSeconds >= m.FlinchUntil;
     }
 
-    static bool MonsterPresent(ClientState conn, uint id, SpawnedMonster m) =>
+    internal static bool MonsterPresent(ClientState conn, uint id, SpawnedMonster m) =>
         !conn.Closed && !conn.LeavingArea && !conn.RageRetired && conn.PendingTransfer is null && !m.Dead && m.Life > 0
         && ReferenceEquals(conn.Monsters.GetValueOrDefault(id), m);
 
@@ -652,7 +652,7 @@ partial class Program
     }
 
     // The packets after a committed hit: energy shield, native recovery, the life bar and life, mana, death or flask charges.
-    static async Task PresentMonsterHit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
+    internal static async Task PresentMonsterHit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
         MonsterHitOutcome hit)
     {
         await SendPlayerEnergyShield(remote, stream, ciphers, conn);
@@ -674,7 +674,7 @@ partial class Program
     }
 
     // A spawned monster's id from the argument if it is 0x hex, else the last spawned one.
-    static uint? MonsterArg(ClientState conn, string[] args, int i)
+    internal static uint? MonsterArg(ClientState conn, string[] args, int i)
     {
         if (args.Length > i && (args[i].StartsWith("0x", StringComparison.OrdinalIgnoreCase)))
         {
@@ -685,7 +685,7 @@ partial class Program
     }
 
     // A cell 3 cells from the server's estimate of the player, walkable if the walk map says so.
-    static (int X, int Y) NextToPlayer(ClientState conn)
+    internal static (int X, int Y) NextToPlayer(ClientState conn)
     {
         var (px, py) = conn.Walk.Position(conn.Clock.Elapsed.TotalSeconds);
         foreach (var (dx, dy) in new[] { (3, 0), (-3, 0), (0, 3), (0, -3), (2, 2), (-2, -2) })

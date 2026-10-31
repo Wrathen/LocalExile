@@ -7,7 +7,7 @@ partial class Program
     // /tp (dev): put the player somewhere in the area at once, for testing without walking there (TeleportTargets.cs).
     // The same move as an arena gate's (Program.Travel.cs): the current action ends (a pending hit or walk-up no longer
     // happens), the server's position estimate jumps to the cell, and S→C 0x1b7 moves the client's player there.
-    static async Task DevTeleport(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string[] args)
+    internal static async Task DevTeleport(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string[] args)
     {
         var candidates = TeleportTargets.Candidates(conn);
         if (args.Length > 0 && args[0].Equals("list", StringComparison.OrdinalIgnoreCase))

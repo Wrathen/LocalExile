@@ -59,7 +59,7 @@ public class Issue75MainMergeTests
         TestSaves.Ensure();
         string name = "ModeWard" + Guid.NewGuid().ToString("N");
         var conn = new ClientState(new(1, "mode ward", 100, 100, 10, 10, null, []), 1, 1)
-            { Character = name, ClassRow = 4, Ruthless = ruthless };
+            { Character = name, ClassRow = 4, LeagueForm = ruthless ? "ruthless" : null };
         var catalog = Program.ItemsFor(conn);
         var items = PlayerInventories.For(name, catalog);
         try

@@ -252,7 +252,7 @@ sealed partial class Program
     // the hideout (Game_MAP_PORTAL_LIST_MS, _GAP_MS, _ENTRY_MS).
     internal static readonly int MapPortalListMs = EnvMs("Game_MAP_PORTAL_LIST_MS", 100), MapPortalGapMs = EnvMs("Game_MAP_PORTAL_GAP_MS", 150),
         MapPortalEntryMs = EnvMs("Game_MAP_PORTAL_ENTRY_MS", 1500);
-    static int EnvMs(string name, int fallback) => int.TryParse(Environment.GetEnvironmentVariable(name), out int ms) && ms >= 0 ? ms : fallback;
+    internal static int EnvMs(string name, int fallback) => int.TryParse(Environment.GetEnvironmentVariable(name), out int ms) && ms >= 0 ? ms : fallback;
     // What dying monsters drop (ItemDrops.cs).
     // Magic and rare items (ItemRolls.cs).
     internal static readonly ItemRolls Rolls = new(Items);
@@ -260,7 +260,6 @@ sealed partial class Program
     internal static readonly UniqueCatalog Uniques = new(Items);
     internal static readonly EssenceCrafting Essences = new(Items, Rolls);
     internal static readonly BenchCrafting Bench = new(Items, Rolls);
-    internal static readonly HarvestCrafting Harvest = new(Items, Rolls);
     internal static readonly ItemDrops Drops = new(Items, Rolls, maps: MapDevices.Value.Atlas, uniques: Uniques);
     // Each live area instance's ground items, across connections (InstanceStore.cs). The lifetime is Auth's
     // InstanceRegistry.Lifetime: the Gateway wipes an instance when Auth would.

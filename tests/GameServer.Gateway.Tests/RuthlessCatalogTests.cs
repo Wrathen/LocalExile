@@ -49,7 +49,7 @@ public class RuthlessCatalogTests
         using var data = new CatalogData();
         data.Write("PassiveSkills", new[] { Node(1, true, [1], "Ruthless name") });
         var regular = new PassiveTree(data.Folder);
-        var ruthless = new PassiveTree(data.Folder, ruthless: true);
+        var ruthless = new PassiveTree(data.Folder, hardMode: true);
 
         Assert.Equal(new Dictionary<uint, int> { [1] = 10 }, regular.Stats([1]));
         Assert.Equal(new Dictionary<uint, int> { [2] = 0 }, ruthless.Stats([1]));

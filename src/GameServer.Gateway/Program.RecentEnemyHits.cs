@@ -5,21 +5,21 @@ using GameServer.Core.Protocol.Login;
 partial class Program
 {
     // Read sources, count and clock together. Development input cannot replace either authoritative output.
-    static (int Count, int Chance) RecentEnemyHitStatsLocked(ClientState conn, IReadOnlyDictionary<uint, int> sources)
+    internal static (int Count, int Chance) RecentEnemyHitStatsLocked(ClientState conn, IReadOnlyDictionary<uint, int> sources)
     {
         int count = conn.RecentEnemyHits.Count(conn.Clock.Elapsed.TotalSeconds);
         int Get(string name) => Stats.Key(name) is uint key ? sources.GetValueOrDefault(key) : 0;
         return (count, RecentEnemyHits.Chance(count, Get(RecentEnemyHits.PerHit), Get(RecentEnemyHits.GenericChance)));
     }
 
-    static void AddRecentEnemyHitStatsLocked(ClientState conn, Dictionary<uint, int> stats)
+    internal static void AddRecentEnemyHitStatsLocked(ClientState conn, Dictionary<uint, int> stats)
     {
         var value = RecentEnemyHitStatsLocked(conn, stats);
         if (Stats.Key(RecentEnemyHits.Counter) is uint counter) stats[counter] = value.Count;
         if (Stats.Key(RecentEnemyHits.VirtualChance) is uint chance) stats[chance] = value.Chance;
     }
 
-    static RecentEnemyHits.Decision IncomingArmourLocked(ClientState conn, bool relevant, int priorContacts,
+    internal static RecentEnemyHits.Decision IncomingArmourLocked(ClientState conn, bool relevant, int priorContacts,
         IReadOnlyDictionary<uint, int> stats)
     {
         // The caller captures membership before ALL stat readers, which may prune a later clock boundary.

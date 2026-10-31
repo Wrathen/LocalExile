@@ -5,7 +5,7 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static async Task RunLivingCollisions(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunLivingCollisions(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         int frames = 0;
         try
@@ -26,7 +26,7 @@ partial class Program
         finally { conn.Instance.RemovePlayer(conn.PeerId); }
     }
 
-    static void PublishPlayerPose(ClientState conn)
+    internal static void PublishPlayerPose(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -38,7 +38,7 @@ partial class Program
 
     // Called under the owner's lock. Replace only final scale in an immutable template, retaining creation stats,
     // equipment and skills. Observers read published snapshots and never lock another connection's simulation.
-    static void RefreshPeerScale(ClientState conn, int scale)
+    internal static void RefreshPeerScale(ClientState conn, int scale)
     {
         if (conn.PeerTemplate is not { } template) return;
         if ((template.Stats ?? []).SingleOrDefault(s => s.Key == ActorScale.Final).Value != scale)
@@ -49,7 +49,7 @@ partial class Program
         conn.Instance.PublishPlayer(new(conn.PeerId, conn.PeerType, template, p.X, p.Y, conn.PlayerLife, conn));
     }
 
-    static async Task SyncInstancePlayers(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task SyncInstancePlayers(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var ids = conn.Instance.PlayersExcept(conn.PeerId).Select(p => p.Id)
             .Concat(conn.SeenPlayers.Keys).Distinct().ToArray();
@@ -91,7 +91,7 @@ partial class Program
             });
     }
 
-    static Task CorrectMonsterCollisions(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static Task CorrectMonsterCollisions(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         using (ProjectileMutation(conn, phase: "collision"))
         {

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Town portals, Portal Scrolls, the map device and map portals. (Agents/docs/dev/modules.md). Everything else is in Directory.Build.props. -->
+
+</Project>

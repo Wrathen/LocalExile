@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NPC shops: buying, and selling to a vendor. (Agents/docs/dev/modules.md). Everything else is in Directory.Build.props. -->
+
+</Project>

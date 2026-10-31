@@ -158,7 +158,7 @@ public sealed partial class AscendancyGatewayIntegrationTests
         public ClientState Reload()
         {
             var state = new ClientState(new(0, "AscendancyIntegration", 128, 128, 32, 32, null, []), 0, 1)
-            { Character = Character, ClassRow = _classRow, God = _god, Hardcore = _hardcore, Ruthless = _ruthless };
+            { Character = Character, ClassRow = _classRow, God = _god, Hardcore = _hardcore, LeagueForm = _ruthless ? "ruthless" : null };
             try { Load.Invoke(null, [state, 1]); }
             catch (TargetInvocationException e) when (e.InnerException is not null) { ExceptionDispatchInfo.Capture(e.InnerException).Throw(); }
             (state.PlayerLife, state.PlayerMana) = (state.Pools.Life, state.Pools.Mana);

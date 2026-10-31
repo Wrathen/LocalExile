@@ -29,21 +29,6 @@ public class DelveHubTests
     }
 
     [Fact]
-    public async Task Repeated_crawler_spawn_keeps_the_existing_object_and_blockers()
-    {
-        var state = new ClientState(new(StashCatalog.DelveHub, "Delve_Hub", 100, 100, 10, 10, null, []), 0, 1)
-            { DelveCrawlerObject = 123 };
-        state.DelveCrawlerBlockers.Add(456);
-        uint next = state.NextObjectId;
-        var method = typeof(Program).GetMethod("SpawnDelveCrawler",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
-        await (Task)method.Invoke(null, ["test", null, null, state])!;
-        Assert.Equal(123u, state.DelveCrawlerObject);
-        Assert.Equal(new uint[] { 456 }, state.DelveCrawlerBlockers);
-        Assert.Equal(next, state.NextObjectId);
-    }
-
-    [Fact]
     public void Delve_data_puts_the_sulphite_at_bytes_16_to_18_of_the_20_byte_part()
     {
         // Live: this message made the Subterranean Chart show 300 sulphite (instance +0xd892).
@@ -69,9 +54,18 @@ public class DelveHubTests
         TestSaves.Ensure();
         string name = "Sulphite-" + Guid.NewGuid().ToString("N");
         CharacterSaves.Write(name, new([], Experience: 5));
-        CharacterSaves.SetSulphite(name, 300);
+        Assert.True(CharacterSaves.ChangeModuleData(name, "delve.sulphite", _ => "300"));
         var save = CharacterSaves.Load(name)!;
-        Assert.Equal((ushort)300, save.Sulphite);
+        Assert.Equal("300", save.ModuleData!["delve.sulphite"]);
         Assert.Equal(5u, save.Experience);
+    }
+
+    [Fact]
+    public void A_save_from_before_the_module_keeps_its_sulphite()
+    {
+        TestSaves.Ensure();
+        string name = "OldSulphite-" + Guid.NewGuid().ToString("N");
+        CharacterSaves.Write(name, new([], Sulphite: 77));
+        Assert.Equal("77", CharacterSaves.ModuleData(name, "delve.sulphite"));
     }
 }

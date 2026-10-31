@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Microtransaction lists, picking cosmetics, and pets. (Agents/docs/dev/modules.md). Everything else is in Directory.Build.props. -->
+
+</Project>

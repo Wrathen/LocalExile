@@ -6,7 +6,7 @@ using GameServer.Core.Protocol.Instance;
 /// (Agents/docs/protocol/13-items.md §2a). The client identifies a mod by its HASH16 and counts its stats itself
 /// (StatsKey1..8 up to the first empty one), so every <see cref="ItemMod"/> is built here with exactly that many values.
 /// </summary>
-sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeProvider? ranges = null)
+sealed class ModCatalog(string folder = "data", bool hardMode = false, ModRangeProvider? ranges = null)
 {
     public ModRangeProvider Ranges { get; } = ranges ?? ModRangeProvider.Default;
 
@@ -85,7 +85,7 @@ sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeP
     }
 
     private readonly Lazy<(List<Mod> Rows, Dictionary<ushort, Mod> ByHash, Dictionary<string, Mod> ById)> _mods =
-        new(() => Load(folder, ruthless, ranges ?? ModRangeProvider.Default));
+        new(() => Load(folder, hardMode, ranges ?? ModRangeProvider.Default));
 
     public bool Loaded => _mods.Value.Rows.Count > 0;
 
@@ -109,7 +109,7 @@ sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeP
         ? $"{mod.Id} {m.Section.ToString().ToLowerInvariant()}: " + string.Join(", ", mod.Stats.Select((s, i) => $"{s.Id} {(i < m.Values.Count ? m.Values[i] : 0)}"))
         : $"0x{m.Hash:x4} {m.Section.ToString().ToLowerInvariant()}: {string.Join(", ", m.Values)}";
 
-    private static (List<Mod>, Dictionary<ushort, Mod>, Dictionary<string, Mod>) Load(string folder, bool ruthless,
+    private static (List<Mod>, Dictionary<ushort, Mod>, Dictionary<string, Mod>) Load(string folder, bool hardMode,
         ModRangeProvider ranges)
     {
         string path = Path.Combine(folder, "tables", "Mods.json"), statsPath = Path.Combine(folder, "tables", "Stats.json"),
@@ -133,7 +133,7 @@ sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeP
         using var d = JsonDocument.Parse(File.ReadAllBytes(path));
         foreach (var r in d.RootElement.EnumerateArray())
         {
-            bool alternate = ruthless && r.TryGetProperty("HasHardmodeStatValues", out var hardmode) && hardmode.GetBoolean();
+            bool alternate = hardMode && r.TryGetProperty("HasHardmodeStatValues", out var hardmode) && hardmode.GetBoolean();
             string suffix = alternate ? "Hardmode" : "";
             // The client's stat iterator (0x142430710) stops at the first empty key, so the count does too.
             var modStats = new List<ModStat>();

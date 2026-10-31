@@ -175,8 +175,8 @@ button (0x140cf97a0) needs a non-empty list, a name and a class. A league entry 
 The create screen (0x140ccc4a0) draws a card for each main league (flags0 bit7, flags1 bit1 clear). Its Hardcore,
 Solo Self-Found and Ruthless check boxes switch to the variants that name the card in a parent field; combinations
 chain (SSF Hardcore's SSF parent is Hardcore; SSF Hardcore Ruthless's Ruthless parent is SSF Hardcore).
-`LeagueCatalog` builds Standard and Allflame (3.29, "Curse of the Allflame") with their seven variants each, named
-like the official ones; `Game_LEAGUES` sets the base leagues. Any league name works without a client change.
+`LeagueCatalog` reads `Leagues/<Name>/league.json` ([modules](../dev/modules.md)), a league with a card or a check box on another's.
+Any league name works without a client change.
 
 Play resolves the selected character's full league and passes authoritative Hardcore, SSF and Ruthless flags to
 the Gateway together with its stable character ID.

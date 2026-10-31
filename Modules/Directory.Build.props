@@ -1,0 +1,25 @@
+<Project>
+  <!-- The repository's settings (nullable, warnings as errors), then what makes a project here a module. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- A module: Modules/<id>/<Name>.csproj builds into Modules/<id>/bin/ (gitignored) as <id>.dll. Deleting the folder removes the
+       module at the next start; the running Gateway hot-reloads a new build (Agents/docs/dev/modules.md). -->
+  <PropertyGroup>
+    <ModuleId>$(MSBuildProjectName.ToLowerInvariant())</ModuleId>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>$(ModuleId)</AssemblyName>
+    <OutputPath>$(MSBuildProjectDirectory)\bin\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="GameServer.Gateway.Tests" />
+    <!-- Compiled against, not copied: every module uses the Gateway's own GameServer.Modding. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\GameServer.Modding\GameServer.Modding.csproj" Private="false" />
+    <!-- The server itself: a module can alter the game fully. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\GameServer.Gateway\GameServer.Gateway.csproj" Private="false" />
+    <!-- The client protocol and shared types. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\GameServer.Core\GameServer.Core.csproj" Private="false" />
+  </ItemGroup>
+</Project>

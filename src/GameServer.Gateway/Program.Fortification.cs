@@ -7,12 +7,12 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static readonly ConditionalWeakTable<ClientState, FortificationSession> FortificationSessions = new();
-    static readonly ConcurrentDictionary<uint, (DateTime At, FortificationState.Transfer State)> CarriedFortification = new();
+    internal static readonly ConditionalWeakTable<ClientState, FortificationSession> FortificationSessions = new();
+    internal static readonly ConcurrentDictionary<uint, (DateTime At, FortificationState.Transfer State)> CarriedFortification = new();
     internal static FortificationSession FortificationOf(ClientState conn) =>
         FortificationSessions.GetValue(conn, _ => new());
 
-    static void EnsureFortificationPools(ClientState conn)
+    internal static void EnsureFortificationPools(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -28,7 +28,7 @@ partial class Program
         return Math.Max(0, total) * (critical ? Math.Max(0, multiplier) / 100m : 1m);
     }
 
-    static Dictionary<uint, int> WithFortification(ClientState conn, Dictionary<uint, int> sources)
+    internal static Dictionary<uint, int> WithFortification(ClientState conn, Dictionary<uint, int> sources)
     {
         lock (conn.Monsters)
         {
@@ -48,7 +48,7 @@ partial class Program
         }
     }
 
-    static void AddFortificationCounts(Dictionary<uint, int> stats, FortificationState.Value value)
+    internal static void AddFortificationCounts(Dictionary<uint, int> stats, FortificationState.Value value)
     {
         foreach (var (name, amount) in new[] { (FortificationSession.Current, value.Current),
             (FortificationSession.Uncapped, (int)Math.Min(int.MaxValue, value.Uncapped)),
@@ -81,7 +81,7 @@ partial class Program
         }
     }
 
-    static void ConfigureFortificationRecovery(ClientState conn, uint maximumLife,
+    internal static void ConfigureFortificationRecovery(ClientState conn, uint maximumLife,
         IReadOnlyDictionary<uint, int> sources)
     {
         var recovery = new Dictionary<uint, int>(sources);
@@ -93,7 +93,7 @@ partial class Program
             name => Stats.Key(name) is uint key ? recovery.GetValueOrDefault(key) : 0);
     }
 
-    static void ConfigureFortificationRecovery(ClientState conn, uint maximumLife, Func<string, int> get)
+    internal static void ConfigureFortificationRecovery(ClientState conn, uint maximumLife, Func<string, int> get)
     {
         lock (conn.Monsters)
         {
@@ -103,7 +103,7 @@ partial class Program
         }
     }
 
-    static void CarryFortification(ClientState conn, uint ticket)
+    internal static void CarryFortification(ClientState conn, uint ticket)
     {
         lock (conn.Monsters)
         {
@@ -119,7 +119,7 @@ partial class Program
             if (DateTime.UtcNow - entry.At > TimeSpan.FromMinutes(5)) CarriedFortification.TryRemove(old, out _);
     }
 
-    static async Task RunFortification(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunFortification(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         RestoreFortification(conn);
         while (!conn.Closed && !conn.RageRetired)

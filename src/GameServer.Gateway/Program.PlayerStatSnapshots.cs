@@ -6,7 +6,7 @@ partial class Program
 {
     // Only call while constructing an accepted player-stat packet inside the send gate. Pure stat
     // construction must not acknowledge anything: remember exactly the pair this packet encodes.
-    static byte[] PlayerStatsUpdateAtGate(ClientState conn, IReadOnlyList<(uint Key, int Value)> stats)
+    internal static byte[] PlayerStatsUpdateAtGate(ClientState conn, IReadOnlyList<(uint Key, int Value)> stats)
     {
         var packet = InstanceEntities.StatsUpdate(PlayerId, stats);
         uint? counterKey = Stats.Key(RecentEnemyHits.Counter), chanceKey = Stats.Key(RecentEnemyHits.VirtualChance);
@@ -22,7 +22,7 @@ partial class Program
 
     // Every full player stat/Actor refresh shares this gate, including refreshes caused by other mechanics.
     // Otherwise a packet prepared before expiry could overwrite a newer Fortification expiry update.
-    static Task SendPlayerStatSnapshot(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static Task SendPlayerStatSnapshot(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         Func<byte[]> packet, string? label) => Send(remote, stream, ciphers, [], label, atGate: () =>
         {
             using (conn.Performance.Lock(conn.Monsters, "stats"))

@@ -9,7 +9,7 @@ partial class Program
     // its duration (S→C 0x1c1) and its stats count in the pools until the duration ends (UtilityFlasks), with the stats
     // and movement speed sent again at the start and the end. Refused while dead, with too few charges, or while this
     // flask's own effect still runs. Another flask of the same kind keeps its own timer; only the strongest applies.
-    static async Task UseUtilityFlask(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint slot,
+    internal static async Task UseUtilityFlask(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint slot,
         InventoryItem flask, ItemCatalog.BaseType type, UtilityFlasks.Utility utility)
     {
         // Mageblood: its magic utility flasks are always on and cannot be used (the client enforces the mod; this is the
@@ -68,7 +68,7 @@ partial class Program
 
     // The player's increased rarity of items found (Gold Flask, gear, passives) that the drops of a kill use
     // (ItemDrops.WithIncreasedRarity).
-    static int IncreasedItemRarity(ClientState conn)
+    internal static int IncreasedItemRarity(ClientState conn)
     {
         var stats = CharacterPlayerStats(conn);
         int Get(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
@@ -76,7 +76,7 @@ partial class Program
     }
 
     // The player's increased quantity of items found (gear, passives) as a multiplier of the kill's item rolls (ItemDrops.Roll).
-    static double ItemQuantityFactor(ClientState conn)
+    internal static double ItemQuantityFactor(ClientState conn)
     {
         var stats = CharacterPlayerStats(conn);
         int Get(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
@@ -85,7 +85,7 @@ partial class Program
 
     // The pools and the walk speed again (under the Monsters lock): after a utility flask effect started or ended, or the
     // equipment changed.
-    static void RecomputePoolsAndSpeed(ClientState conn)
+    internal static void RecomputePoolsAndSpeed(ClientState conn)
     {
         conn.Pools = PoolsFor(conn, conn.Pools.Level);
         conn.ApplyMovementSpeed();
@@ -99,7 +99,7 @@ partial class Program
     // Ends the utility flask effects whose time is up (by the connection clock: a pause holds them), whose flask left its
     // cell of the flask bar, or, on death, all of them: their buffs come off and the stats and movement speed go back. Runs
     // while any effect runs; a failed step is logged and the next one tries again.
-    static async Task RunUtilityFlasks(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, int ticket)
+    internal static async Task RunUtilityFlasks(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, int ticket)
     {
         try
         {
@@ -134,7 +134,7 @@ partial class Program
         }
     }
 
-    static async Task SendUtilityFlaskEnd(string remote, NetworkStream stream, ConnectionCiphers ciphers, UtilityFlasks.Active e, string why)
+    internal static async Task SendUtilityFlaskEnd(string remote, NetworkStream stream, ConnectionCiphers ciphers, UtilityFlasks.Active e, string why)
     {
         foreach (var packet in UtilityFlasks.EndPackets(e, PlayerId))
             await Send(remote, stream, ciphers, packet, $"0x01c2 player buff: {e.Name} (flask {e.Slot}) effect ends ({why})");

@@ -11,12 +11,12 @@ using DamageType = GameServer.Core.World.DamageType;
 partial class Program
 {
     // Monster-domain Mods.dat rows, their names and effects; loaded with the first magic or rare monster.
-    static readonly Lazy<MonsterModCatalog> MonsterModRolls = new(() => new MonsterModCatalog(Items.Mods));
+    internal static readonly Lazy<MonsterModCatalog> MonsterModRolls = new(() => new MonsterModCatalog(Items.Mods));
 
     // Per instance, the mods its magic monsters share: "all monsters in an instance that are the same or very similar
     // will have the same magic monster modifier" (3.19.0 patch notes). Very similar: the same name (The Coast's
     // Drowned are several MonsterVarieties rows), as long as the affix can roll on it (MonsterModCatalog.SharedMagic).
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<InstanceState, Dictionary<string, MonsterModSet>> MagicModsOf = new();
+    internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<InstanceState, Dictionary<string, MonsterModSet>> MagicModsOf = new();
 
     /// <summary>The mods a new monster gets: <paramref name="kept"/> (a monster of a kept instance, a /mob_mods
     /// choice) when it has any, else freshly rolled for its rarity. Area packs pass <paramref name="alone"/> false;
@@ -98,7 +98,7 @@ partial class Program
             ? Math.Max(0, 1 - m.Mods.Effects.PhysicalReduction / 100.0) : 1)).Scale(m.Mods.Effects.DamageTaken(spell));
 
     /// <summary>The player's base_self_critical_strike_multiplier_-% (critical strikes against them deal less extra damage).</summary>
-    static int SelfCriticalReduction(ClientState conn) =>
+    internal static int SelfCriticalReduction(ClientState conn) =>
         Stats.Key("base_self_critical_strike_multiplier_-%") is uint key ? CharacterPlayerStats(conn).GetValueOrDefault(key) : 0;
 
     /// <summary>Whether the monster blocks a hit of the player (Stalwart's monster_base_block_%: attacks only). Rolled
@@ -135,7 +135,7 @@ partial class Program
 
     // Monsters with life regeneration (of the Hydra) regain life: every 0.5 s the server adds it and sends the new life
     // (0x1b1) of each one that changed, as it does for hits.
-    static async Task RunMonsterRegeneration(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunMonsterRegeneration(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         const int StepMs = 500;
         double last = conn.Clock.Elapsed.TotalSeconds;
@@ -187,7 +187,7 @@ partial class Program
     }
 
     // The /mob_mods command: a monster's mods, or the monster created again with the given affixes.
-    static async Task MonsterModsCommand(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string[] args)
+    internal static async Task MonsterModsCommand(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string[] args)
     {
         var rolls = MonsterModRolls.Value;
         uint? target = MonsterArg(conn, args, 0);

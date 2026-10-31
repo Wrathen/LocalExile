@@ -1,0 +1,10 @@
+{
+  "name": "SSF Hardcore",
+  "parent": "SSF Standard",
+  "base": "Standard",
+  "hardcore": true,
+  "ssf": true,
+  "entryOf": "Hardcore",
+  "entryKind": "ssf",
+  "description": "A character killed moves to SSF Standard. Solo Self-Found: no trading or parties."
+}

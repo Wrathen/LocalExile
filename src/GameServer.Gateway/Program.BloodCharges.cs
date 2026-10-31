@@ -10,16 +10,16 @@ partial class Program
 
     // Whether a GrantedEffects row uses Blood Charges (its per-charge damage stat, a constant at every level), decided
     // once per row: CharacterPlayerStats asks on every hit, and resolving a stat set each time would cost a crowd's hits.
-    static readonly ConcurrentDictionary<(bool Ruthless, int Effect), bool> BloodChargeEffects = new();
+    internal static readonly ConcurrentDictionary<(bool HardMode, int Effect), bool> BloodChargeEffects = new();
 
-    static bool UsesBloodCharges(ClientState conn, int effect) => BloodChargeEffects.GetOrAdd((conn.Ruthless, effect),
+    internal static bool UsesBloodCharges(ClientState conn, int effect) => BloodChargeEffects.GetOrAdd((LeagueFor(conn).HardMode, effect),
         key => BloodCharges.Uses(name => Stats.Key(name) is uint k
             ? SkillsFor(conn).EffectStats(key.Effect, 1).Where(s => s.Item1 == k).Select(s => s.Item2).FirstOrDefault() : 0));
 
     // The Charges tab's rows: the count, the maximum (Character.ot's 5 plus the raw maximum_blood_scythe_charges sources,
     // the Reap enchantment) and show_blood_charge_info while a gem socketed in an active item uses the charges. get reads
     // the sources before this publication, so the base adds once.
-    static List<(string Stat, int Value)> BloodChargePanelRows(ClientState conn, Func<string, int> get)
+    internal static List<(string Stat, int Value)> BloodChargePanelRows(ClientState conn, Func<string, int> get)
     {
         int held;
         lock (conn.Monsters) held = conn.BloodCharges;
@@ -35,18 +35,18 @@ partial class Program
     }
 
     // The maximum as the character's final stats publish it (BloodChargePanelRows).
-    static int BloodChargeMaximum(IReadOnlyDictionary<uint, int> player) =>
+    internal static int BloodChargeMaximum(IReadOnlyDictionary<uint, int> player) =>
         Stats.Key(BloodCharges.Maximum) is uint key ? Math.Max(0, player.GetValueOrDefault(key)) : BloodCharges.BaseMaximum;
 
     // The skill's more damage from the charges held now, read under the lock with the sweep's other inputs.
-    static double BloodChargeDamageMore(ClientState conn, Func<string, int> own)
+    internal static double BloodChargeDamageMore(ClientState conn, Func<string, int> own)
     {
         if (!BloodCharges.Uses(own)) return 1;
         lock (conn.Monsters) return BloodCharges.More(own(BloodCharges.DamagePerCharge), conn.BloodCharges);
     }
 
     // A use of a Blood Charge skill landed: kills take a charge each, a survivor gives one. True when the count changed.
-    static bool SettleBloodChargesLocked(ClientState conn, IReadOnlyDictionary<uint, int> player, int kills, int survivors)
+    internal static bool SettleBloodChargesLocked(ClientState conn, IReadOnlyDictionary<uint, int> player, int kills, int survivors)
     {
         int before = conn.BloodCharges;
         conn.BloodCharges = BloodCharges.Settle(before, kills, survivors, BloodChargeMaximum(player));
@@ -54,7 +54,7 @@ partial class Program
     }
 
     // Death takes the charges (BuffDefinitions CancelOnDeath; the client drops the buff itself).
-    static void ClearBloodChargesOnDeath(ClientState conn)
+    internal static void ClearBloodChargesOnDeath(ClientState conn)
     {
         conn.BloodCharges = 0;
         conn.BloodChargeBuff = 0;
@@ -63,7 +63,7 @@ partial class Program
 
     // The buff with the new count (0x1c2 for the old instance, 0x1c1 with the stacks) and the stats and skills that read
     // the count (SendChargeStats: the panel rows and the skill's damage).
-    static async Task SendBloodCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task SendBloodCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         int held; ushort remove, add;
         lock (conn.Monsters)

@@ -8,11 +8,11 @@ partial class Program
     // The client shows the item and enforces "cannot be used" itself (the mod); the server is the backstop here.
     // The flask buffs are kept in step by RunUniqueBeltEffects (Program.UniqueBelts.cs). Not modelled yet: the "effects
     // cannot be removed" backstop (nothing here removes a flask's effect) and the Foulborn rightmost variant.
-    const uint MagebloodWord = 3562871479;
-    const string MagebloodFlasksMod = "MagicUtilityFlasksAlwaysApplyUnique__1";
+    internal const uint MagebloodWord = 3562871479;
+    internal const string MagebloodFlasksMod = "MagicUtilityFlasksAlwaysApplyUnique__1";
 
     /// <summary>The Mageblood the character wears (belt row 10), or null when it is not worn or its requirements are unmet.</summary>
-    static Item? MagebloodBelt(ClientState conn)
+    internal static Item? MagebloodBelt(ClientState conn)
     {
         var belt = ItemsOf(conn).Items(PlayerInventories.Belt).FirstOrDefault();
         return belt is { } worn && !IsInactive(conn, worn.Id) && IsMageblood(worn.Item) ? worn.Item : null;
@@ -25,13 +25,13 @@ partial class Program
     /// flasks, and not life/mana flasks).</summary>
     internal static bool IsMagicUtilityFlask(Item item) => IsMagicUtilityFlask(item, Items);
 
-    static bool IsMagicUtilityFlask(Item item, ItemCatalog items) =>
+    internal static bool IsMagicUtilityFlask(Item item, ItemCatalog items) =>
         item.Rarity == ItemRarity.Magic && items.ByHash(item.TypeHash) is { } type && items.UtilityFlaskOf(type) is not null;
 
     /// <summary>How many magic utility flasks Mageblood applies: its mod's value (2-4 in 3.29).</summary>
     internal static int MagebloodFlaskCount(Item belt) => MagebloodFlaskCount(belt, Items);
 
-    static int MagebloodFlaskCount(Item belt, ItemCatalog items)
+    internal static int MagebloodFlaskCount(Item belt, ItemCatalog items)
     {
         foreach (var mod in belt.Mods)
             if (items.Mods.ByHash(mod.Hash) is { Id: MagebloodFlasksMod } && mod.Values.Count > 0)
@@ -44,7 +44,7 @@ partial class Program
     internal static IReadOnlyList<InventoryItem> MagebloodFlasks(IEnumerable<InventoryItem> bar, int count) =>
         MagebloodFlasks(bar, count, Items);
 
-    static IReadOnlyList<InventoryItem> MagebloodFlasks(IEnumerable<InventoryItem> bar, int count, ItemCatalog items) =>
+    internal static IReadOnlyList<InventoryItem> MagebloodFlasks(IEnumerable<InventoryItem> bar, int count, ItemCatalog items) =>
         [.. bar.Where(i => IsMagicUtilityFlask(i.Item, items)).OrderBy(i => i.X).Take(Math.Max(0, count))];
 
     /// <summary>The sources of the magic utility flasks Mageblood keeps applied, or none when it is not worn. The flasks'
@@ -83,7 +83,7 @@ partial class Program
 
     /// <summary>After the flask bar changed while Mageblood is worn: apply the new permanent flask stats now (the pools, the
     /// walk speed and the client's stats), instead of waiting for an equipment change or a relogin.</summary>
-    static async Task RefreshMagebloodFlasks(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RefreshMagebloodFlasks(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (MagebloodBelt(conn) is null) return;
         lock (conn.Monsters) RecomputePoolsAndSpeed(conn);

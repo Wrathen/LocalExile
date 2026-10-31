@@ -83,7 +83,8 @@ public sealed record ControlResponse
     public string? League { get; init; }
     public bool Hardcore { get; init; }
     public bool Ssf { get; init; }
-    public bool Ruthless { get; init; }
+    /// <summary>The league form (<see cref="GameServer.Core.Accounts.League.Form"/>): the module the character plays by.</summary>
+    public string? LeagueForm { get; init; }
     /// <summary>The character's class: Characters.dat IntegerId (CharacterClass), the Witch (3) if unknown.</summary>
     public int Class { get; init; } = 3;
     /// <summary>The character's level (from the account store).</summary>

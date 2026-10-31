@@ -202,10 +202,11 @@ if (-not $NoBuild) {
         dotnet build (Join-Path $repo "src\GameServer.$s") -v q -nologo | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "build failed: GameServer.$s (run: dotnet build src\GameServer.$s)" }
     }
-    # The first-party mods (Mods\Source\) into Mods\Binaries\, which the Gateway loads (Agents/docs/dev/modding.md). One that does
+    # The modules in Modules\ and the mods (Mods\Source\ into Mods\Binaries\), which the Gateway loads; it compiles Leagues\ itself
+    # (Agents/docs/dev/modules.md, modding.md). One that does
     # not build is left out; the Gateway runs without it.
     if ($servers -contains 'Gateway') {
-        foreach ($mod in Get-ChildItem (Join-Path $repo 'Mods\Source') -Filter *.csproj -Recurse -ErrorAction SilentlyContinue) {
+        foreach ($mod in Get-ChildItem (Join-Path $repo 'Modules'), (Join-Path $repo 'Mods\Source') -Filter *.csproj -Recurse -ErrorAction SilentlyContinue) {
             dotnet build $mod.FullName -v q -nologo | Out-Null
             if ($LASTEXITCODE -ne 0) { Write-Warning "mod $($mod.BaseName) did not build (run: dotnet build $($mod.FullName)); the Gateway starts without it" }
         }

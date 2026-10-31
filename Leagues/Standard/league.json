@@ -1,0 +1,8 @@
+{
+  "name": "Standard",
+  "parent": null,
+  "base": "Standard",
+  "hardcore": false,
+  "ssf": false,
+  "description": "The default game mode."
+}

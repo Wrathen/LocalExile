@@ -2,7 +2,7 @@ using GameServer.Core.Protocol.Instance;
 
 partial class Program
 {
-    sealed record GemRequirementSnapshot(int Level, int Strength, int Dexterity, int Intelligence,
+    internal sealed record GemRequirementSnapshot(int Level, int Strength, int Dexterity, int Intelligence,
         IReadOnlyList<(byte Row, InventoryItem Item)> Equipment, IReadOnlySet<uint> Inactive)
     {
         public IReadOnlyList<(byte Row, uint ItemId, int Socket, Item Gem)> Places => PlacesIn(Equipment);
@@ -16,7 +16,7 @@ partial class Program
 
     // Same supported attribute calculation as pool construction, from a single current equipment read.
     // No PoolsFor/SupportedSkill recursion, pool assignment/refill or old-snapshot cache publication.
-    static GemRequirementSnapshot CurrentGemRequirements(ClientState conn,
+    internal static GemRequirementSnapshot CurrentGemRequirements(ClientState conn,
         IReadOnlyList<(byte Row, InventoryItem Item)>? equipment = null)
     {
         lock (conn.Monsters)

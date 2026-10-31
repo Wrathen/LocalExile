@@ -7,7 +7,7 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static readonly AsyncLocal<Func<bool>?> ProjectileOutputGuard = new();
+    internal static readonly AsyncLocal<Func<bool>?> ProjectileOutputGuard = new();
     /// <summary>One gameplay pump and one presentation consumer per connection, regardless of projectile count.</summary>
     internal sealed class ProjectileSession : IProjectileWorld
     {
@@ -238,7 +238,7 @@ partial class Program
             var packet = new SkillDamageContext(shot.Spell ? SkillHitKind.Spell : SkillHitKind.Attack,
                 CharacterPlayerStats(Conn)).Hit(baseHit).Scale(more);
             var gambler = GamblerFor(CharacterPlayerStats(Conn));
-            var rolled = WithDamageVsRarity(CharacterPlayerStats(Conn), target, (gambler with { DamageMorePct = 0 }).RollOutgoingHit(packet, random));
+            var rolled = GameEvents.WithOutgoingDamage(Conn, CharacterPlayerStats(Conn), target, (gambler with { DamageMorePct = 0 }).RollOutgoingHit(packet, random));
             int chance = contact.Projectile.Form > 0 ? shot.SecondFormCriticalChance ?? shot.CriticalChance : shot.CriticalChance;
             // Base chance/multiplier belong to release; conditional owner state is read at this contact.
             bool critical = RollCriticalStrike(Conn, chance, shot.SkillStats, attack: !shot.Spell, skillRoll: shot.CriticalRoll)
@@ -472,7 +472,7 @@ partial class Program
         };
     }
 
-    static ProjectileSession ProjectilesFor(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static ProjectileSession ProjectilesFor(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -483,7 +483,7 @@ partial class Program
         }
     }
 
-    static void AdvanceProjectiles(ClientState conn) => conn.ProjectileRuntime?.Advance();
+    internal static void AdvanceProjectiles(ClientState conn) => conn.ProjectileRuntime?.Advance();
 
     // Advance and replace actor motion/life in the same critical section. A flush followed by a separate
     // Monsters lock leaves a race in which the pump can consume the replacement as historical movement.
@@ -491,7 +491,7 @@ partial class Program
     internal static double ProjectileWorldTime(ClientState conn) => conn.ProjectileRuntime is { Active: true } session
         ? session.Runtime.Now / (double)ProjectileRuntime.QuantaPerSecond : conn.Clock.Elapsed.TotalSeconds;
 
-    sealed class ProjectileMutationScope : IDisposable
+    internal sealed class ProjectileMutationScope : IDisposable
     {
         readonly System.Threading.Lock experience;
         readonly ConnectionPerformance.LockScope actorLock;

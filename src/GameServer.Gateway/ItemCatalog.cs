@@ -18,20 +18,20 @@ sealed class ItemCatalog
     private StashRules? _stash;
     private readonly string _folder;
 
-    public ItemCatalog(string folder, bool ruthless = false, LimitSettings? limits = null)
+    public ItemCatalog(string folder, bool hardMode = false, LimitSettings? limits = null)
     {
         _folder = folder;
         Limits = limits ?? LimitSettings.Default;
-        Mods = new ModCatalog(folder, ruthless);
+        Mods = new ModCatalog(folder, hardMode);
         _rows = new(() => Load(folder, Mods));
         _byHash = new(() => _rows.Value.Rows.GroupBy(t => t.Hash).ToDictionary(g => g.Key, g => g.First()));
-        _gems = new(() => LoadGems(folder, ruthless));
+        _gems = new(() => LoadGems(folder, hardMode));
         _requirements = new(() => LoadRequirements(folder));
         _shieldBlocks = new(() => LoadShieldBlocks(folder));
         _weaponCrits = new(() => LoadWeaponCrits(folder));
         _defences = new(() => LoadDefences(folder));
-        _flasks = new(() => LoadFlasks(folder, _rows.Value.Rows, ruthless));
-        _utilityFlasks = new(() => UtilityFlasks.Load(folder, _rows.Value.Rows, ruthless));
+        _flasks = new(() => LoadFlasks(folder, _rows.Value.Rows, hardMode));
+        _utilityFlasks = new(() => UtilityFlasks.Load(folder, _rows.Value.Rows, hardMode));
         _visualsById = new(() => LoadVisualsById(folder));
     }
 
@@ -342,7 +342,7 @@ sealed class ItemCatalog
     /// <summary>Any flask's charges (life, mana or utility, usable or not), for refills; null for other types.</summary>
     public Flasks.Flask? FlaskChargesOf(BaseType t) => FlaskOf(t) ?? UtilityFlaskOf(t)?.Charges;
 
-    private static Dictionary<int, Flasks.Flask> LoadFlasks(string folder, IReadOnlyList<BaseType> rows, bool ruthless)
+    private static Dictionary<int, Flasks.Flask> LoadFlasks(string folder, IReadOnlyList<BaseType> rows, bool hardMode)
     {
         string flasks = Path.Combine(folder, "tables", "Flasks.json"), charges = Path.Combine(folder, "tables", "ComponentCharges.json");
         var result = new Dictionary<int, Flasks.Flask>();
@@ -358,7 +358,7 @@ sealed class ItemCatalog
                 (r.GetProperty("LifePerUse").GetInt32(), r.GetProperty("ManaPerUse").GetInt32()) is var (life, mana) && life + mana > 0)
                 // RecoveryTime is in tenths of a second (Small Life Flask: 30, 3 s).
                 result.TryAdd(b.GetInt32(), new(life, mana,
-                    r.GetProperty(ruthless && r.TryGetProperty("RecoveryTime2", out var alternate)
+                    r.GetProperty(hardMode && r.TryGetProperty("RecoveryTime2", out var alternate)
                         && alternate.ValueKind == JsonValueKind.Number ? "RecoveryTime2" : "RecoveryTime").GetInt32() / 10.0,
                     use.PerCharge, use.Max));
         return result;
@@ -369,7 +369,7 @@ sealed class ItemCatalog
     // Not creatable: the "[DNT]" placeholder variants, the "[UNUSED] …", "[DNT] …" and "WIP …" gem rows, the awakened
     // supports other than Empower, Enhance and Enlighten (disabled since 3.28; theirs is GemProgressionExceptionalPlus),
     // and a Vaal variant whose base skill is only a placeholder's. A Vaal variant is named "Vaal " + its base variant.
-    private static Dictionary<int, GemType> LoadGems(string folder, bool ruthless)
+    private static Dictionary<int, GemType> LoadGems(string folder, bool hardMode)
     {
         string Table(string n) => Path.Combine(folder, "tables", n + ".json");
         var result = new Dictionary<int, GemType>();
@@ -382,7 +382,7 @@ sealed class ItemCatalog
         using var xt = JsonDocument.Parse(File.ReadAllBytes(Table("ItemExperienceTypes")));
         static int Row(JsonElement r, string name) => r.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : -1;
         // Null or absent means no alternate; row zero remains a real effect, and must not be treated as missing.
-        int Effect(JsonElement r, string name) => ruthless && Row(r, name + "Hardmode") is int alternate and >= 0
+        int Effect(JsonElement r, string name) => hardMode && Row(r, name + "Hardmode") is int alternate and >= 0
             ? alternate : Row(r, name);
         var thresholds = x.RootElement.EnumerateArray().GroupBy(r => Row(r, "ItemExperienceType")).ToDictionary(t => t.Key,
             t => (IReadOnlyList<int>)[.. t.OrderBy(r => Row(r, "ItemCurrentLevel")).Select(r => Row(r, "Experience"))]);

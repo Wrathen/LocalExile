@@ -15,7 +15,7 @@ public sealed class RuthlessRuntimeCatalogTests : IDisposable
         characters.Add(name);
         var conn = new ClientState(new(0, "ModeRuntime", 128, 128, 32, 32, null, []), 0, 1)
         {
-            Character = name, ClassRow = 1, Ruthless = ruthless, PlayerLife = 285, PlayerMana = 170,
+            Character = name, ClassRow = 1, LeagueForm = ruthless ? "ruthless" : null, PlayerLife = 285, PlayerMana = 170,
             Pools = new(40, 285, 170, 100, 0, Strength: 100, Dexterity: 100, Intelligence: 100),
         };
         // Item activation reads the requirement attributes, not the pools above (socketed gems count).

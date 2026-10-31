@@ -20,7 +20,7 @@ public class GameSessionModeTests
         var session = new GameSession(accounts, instances);
         Assert.True(JsonNode.Parse(session.Handle("{\"op\":\"login\",\"name\":\"ModeAccount\",\"password\":\"test-password\"}"))!["ok"]!.GetValue<bool>());
         Assert.True(JsonNode.Parse(session.Handle("{\"op\":\"enter_world\",\"name\":\"ModeProbe\"}"))!["ok"]!.GetValue<bool>());
-        store.UpdateCharacter(HardcoreDeathRules.Apply(character, LeagueCatalog.Default.Find(league)!, DateTimeOffset.UtcNow));
+        store.UpdateCharacter(HardcoreDeathRules.Apply(character, LeagueCatalog.FromEnvironment().Find(league)!, DateTimeOffset.UtcNow));
         var change = JsonNode.Parse(session.Handle("{\"op\":\"enter_area\",\"area\":\"1_1_town\"}"))!;
         Assert.False(change["ok"]!.GetValue<bool>());
         Assert.Null(instances.Current(character.Id));

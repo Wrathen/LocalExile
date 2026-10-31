@@ -1,0 +1,8 @@
+{
+  "name": "Hardcore Allflame",
+  "parent": "Allflame",
+  "base": "Allflame",
+  "hardcore": true,
+  "ssf": false,
+  "description": "Plunder sunken treasures and harness the power of the Allflame. A character killed in Hardcore Allflame is moved to Allflame League."
+}

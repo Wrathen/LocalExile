@@ -4,7 +4,7 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    static async Task PushOutOfCollision(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool living = false)
+    internal static async Task PushOutOfCollision(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool living = false)
     {
         if (!conn.PlayerSent || conn.PlayerLife == 0 || conn.PendingTransfer is not null || conn.Closed
             || conn.Layout.GridW <= 0 || conn.Layout.GridH <= 0) return;

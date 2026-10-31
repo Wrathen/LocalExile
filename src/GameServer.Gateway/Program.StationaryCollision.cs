@@ -4,7 +4,7 @@ using GameServer.Core.Protocol.Login;
 
 partial class Program
 {
-    static async Task RegisterStationaryCollision(string remote, NetworkStream stream, ConnectionCiphers ciphers,
+    internal static async Task RegisterStationaryCollision(string remote, NetworkStream stream, ConnectionCiphers ciphers,
         ClientState conn, uint id, string type, int x, int y,
         float rotation, string? editorKey = null, string? model = null)
     {

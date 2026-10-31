@@ -18,8 +18,11 @@ public interface IPlayer
     /// <summary>Solo self-found.</summary>
     bool SoloSelfFound { get; }
 
-    /// <summary>Ruthless.</summary>
-    bool Ruthless { get; }
+    /// <summary>The league this connection plays in, by name.</summary>
+    string LeagueId { get; }
+
+    /// <summary>Whether this connection's league uses a module.</summary>
+    bool Uses(string module);
 
     /// <summary>The character's level.</summary>
     int Level { get; }

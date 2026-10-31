@@ -41,6 +41,10 @@ public interface IModContext
     /// projectile's kill (a bow, a spell).</summary>
     IDisposable OnMonsterKilled(Func<MonsterKill, Task> killed);
 
+    /// <summary>The player used an object with the default action (a click on it). Return true when the object is this
+    /// mod's: nothing else handles the use.</summary>
+    IDisposable OnObjectUsed(Func<ObjectUse, Task<bool>> used);
+
     /// <summary>A killed monster's drops, before they are rolled: scale them, add items, or cancel them.</summary>
     IDisposable ModifyDrops(Action<DropRoll> modify);
 
@@ -50,4 +54,31 @@ public interface IModContext
     /// <summary>Stats added to the character's own (beside the passives' and auras'), by stat id
     /// (<c>Stats.dat</c>, as /set_stat takes them). Asked again whenever the server rebuilds the character's stats.</summary>
     IDisposable ModifyStats(Action<StatSheet> modify);
+}
+
+/// <summary>What a module (or a league's own code) can do: everything a mod can, and overhauls. It runs only for the players of
+/// leagues that list it. The hooks of the league run first, then its modules', then mods'.</summary>
+public interface IModuleContext : IModContext
+{
+    /// <summary>The player is about to leave the area or the game, with why.</summary>
+    IDisposable OnPlayerLeaving(Func<IPlayer, string, Task> leaving);
+
+    /// <summary>The rules this module gives the leagues that use it; the first in a league's list that gives any wins.</summary>
+    void ProvideLeagueRules(Func<LeagueRules> rules);
+
+    /// <summary>What the module can do with this player's world.</summary>
+    IPlayerWorld World(IPlayer player);
+
+    /// <summary>The player's hideout is being furnished: place the module's stations here.</summary>
+    IDisposable OnHideoutReady(Func<IPlayer, Task> ready);
+
+    /// <summary>Messages sent as the player enters an area, before its objects: a log line and the message.</summary>
+    IDisposable OnEnterMessages(Func<IPlayer, IEnumerable<(string Log, byte[] Message)>> messages);
+
+    /// <summary>What the area's first message says beyond the server's own; null for no opinion. The first answer wins.</summary>
+    IDisposable OnAreaHeader(Func<IPlayer, AreaHeader?> header);
+
+    /// <summary>An option picked in an NPC's dialogue; the Gateway only talks to NPCs, and what an option does is a module's.
+    /// Return true when it was this module's. An option nothing answers does nothing.</summary>
+    IDisposable OnNpcOption(Func<NpcOption, Task<bool>> run);
 }

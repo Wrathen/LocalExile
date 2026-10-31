@@ -8,7 +8,7 @@ using GameServer.Modding;
 /// type for every mod), the assemblies of the mods it depends on, and the files in its own folder. Not the server's other
 /// assemblies: the Gateway, Core and Data are internal to it.
 /// </summary>
-sealed class ModLoadContext(string id, string folder, IReadOnlyList<ModLoadContext> dependencies)
+sealed class ModLoadContext(string id, string folder, bool module, IReadOnlyList<ModLoadContext> dependencies)
     : AssemblyLoadContext($"mod {id}", isCollectible: true)
 {
     static readonly string Contracts = typeof(IMod).Assembly.GetName().Name!;
@@ -18,14 +18,16 @@ sealed class ModLoadContext(string id, string folder, IReadOnlyList<ModLoadConte
 
     protected override Assembly? Load(AssemblyName name)
     {
-        if (name.Name == Contracts) return null;
+        // A module can alter the game fully: the server's assemblies are the host's own copies.
+        if (name.Name == Contracts || (module && name.Name?.StartsWith("GameServer.", StringComparison.Ordinal) == true)) return null;
         if (name.Name?.StartsWith("GameServer.", StringComparison.Ordinal) == true)
             throw new FileNotFoundException($"a mod can use GameServer.Modding, not {name.Name} (the server's own code)");
         foreach (var dependency in dependencies)
             if (dependency.Assemblies.FirstOrDefault(a => a.GetName().Name == name.Name) is { } shared) return shared;
-        string path = Path.Combine(folder, name.Name + ".dll");
-        // null: the default context's (the framework).
-        return File.Exists(path) ? LoadCopy(path) : null;
+        // Beside its manifest, or in its build's output (a module). null: the default context's (the framework).
+        foreach (string path in new[] { Path.Combine(folder, name.Name + ".dll"), Path.Combine(folder, "bin", name.Name + ".dll") })
+            if (File.Exists(path)) return LoadCopy(path);
+        return null;
     }
 
     /// <summary>Loads a private disk copy (and its .pdb), leaving the build output free. Path-backed collectible
@@ -55,5 +57,19 @@ sealed class ModLoadContext(string id, string folder, IReadOnlyList<ModLoadConte
         try { if (Directory.Exists(full)) Directory.Delete(full, recursive: true); return true; }
         catch (IOException) { return false; }
         catch (UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>Loads what a mod's files or its compiled scripts were read into, by the same private disk copy as
+    /// <see cref="LoadCopy"/>: never from a stream.</summary>
+    public Assembly LoadImage(byte[] image, byte[]? symbols)
+    {
+        lock (copyGate)
+        {
+            Directory.CreateDirectory(CopyDirectory);
+            string copy = Path.Combine(CopyDirectory, Guid.NewGuid().ToString("N") + ".dll");
+            File.WriteAllBytes(copy, image);
+            if (symbols is not null) File.WriteAllBytes(Path.ChangeExtension(copy, ".pdb"), symbols);
+            return LoadFromAssemblyPath(copy);
+        }
     }
 }

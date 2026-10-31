@@ -17,7 +17,7 @@ sealed class QuestRewardCatalog
     public IReadOnlyList<Choice> Choices(int row, int classRow) =>
         Find(row) is { } offer ? [.. offer.Choices.Where(c => c.Classes.Count == 0 || c.Classes.Contains(classRow))] : [];
 
-    public static QuestRewardCatalog Load(string folder = "data", bool ruthless = false)
+    public static QuestRewardCatalog Load(string folder = "data", bool hardMode = false, bool supportGems = true)
     {
         var result = new QuestRewardCatalog();
         string Table(string name) => File.ReadAllText(Path.Combine(folder, "tables", name + ".json"));
@@ -25,17 +25,17 @@ sealed class QuestRewardCatalog
         var names = flags.RootElement.EnumerateArray().Select(f => f.GetProperty("Id").GetString()!).ToArray();
         using var choices = JsonDocument.Parse(Table("QuestRewards"));
         HashSet<int> supportRows = [];
-        if (ruthless)
+        if (!supportGems)
         {
             using var gems = JsonDocument.Parse(Table("SkillGems"));
             supportRows = gems.RootElement.EnumerateArray().Where(r => r.GetProperty("IsSupport").GetBoolean())
                 .Select(r => r.GetProperty("BaseItemTypesKey").GetInt32()).ToHashSet();
         }
-        // Pinned 3.29 QuestRewards column16: 0 shared, 1 regular-only, 2 Ruthless-only.
+        // Pinned 3.29 QuestRewards column16: 0 shared, 1 regular-only, 2 HardMode-only.
         // This selects the Uncarved Gemstone/gear alternatives rather than normal supports or movement gems.
         var byOffer = choices.RootElement.EnumerateArray().Where(r => (!r.TryGetProperty("__col16", out var mode)
-                || mode.GetInt32() == 0 || mode.GetInt32() == (ruthless ? 2 : 1))
-                && (!ruthless || !supportRows.Contains(r.GetProperty("Reward").GetInt32())))
+                || mode.GetInt32() == 0 || mode.GetInt32() == (hardMode ? 2 : 1))
+                && (supportGems || !supportRows.Contains(r.GetProperty("Reward").GetInt32())))
             .GroupBy(r => r.GetProperty("RewardOffer").GetInt32())
             .ToDictionary(g => g.Key, g => g.Select(r => new Choice((uint)r.GetProperty("__col1").GetInt32() + 1,
                 r.GetProperty("Reward").GetInt32(), r.GetProperty("RewardLevel").GetInt32(), r.GetProperty("RewardStack").GetInt32(),
@@ -57,7 +57,7 @@ sealed class QuestRewardCatalog
     }
 
     // Grant level-one gems/currency and normal flasks at the row's level. A caller supplying the mode's ItemRolls can
-    // also construct gear at its actual item level and rarity (Ruthless's armour/belt alternatives). Scripted rewards
+    // also construct gear at its actual item level and rarity (HardMode's armour/belt alternatives). Scripted rewards
     // without a model remain unavailable; Program.Npcs omits a choice when this returns null.
     public static Item? Create(Choice choice, ItemCatalog items, ItemRolls? rolls = null)
     {
@@ -74,7 +74,7 @@ sealed class QuestRewardCatalog
         return ItemCatalog.Create(type) with { StackSize = (ushort)Math.Min(choice.Stack, ushort.MaxValue), ItemLevel = (byte)choice.Level };
     }
 
-    /// <summary>Pack rewards using their actual sizes; Ruthless gear choices must not overlap like 1×1 gems.</summary>
+    /// <summary>Pack rewards using their actual sizes; HardMode gear choices must not overlap like 1×1 gems.</summary>
     public static IReadOnlyList<InventoryItem> Arrange(IEnumerable<(uint Id, Item Item)> rewards, ItemCatalog catalog)
     {
         var placed = new List<(InventoryItem Placement, byte Width, byte Height)>();

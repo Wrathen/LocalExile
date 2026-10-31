@@ -26,7 +26,7 @@ partial class Program
 
     // One tick of the ignited monsters (RunPlayerTick): the strongest ignite's fire damage through the monster's
     // resistance, the buff off when the last ignite ends, and kills, as Righteous Fire's burn (BurnAround) commits them.
-    static async Task BurnIgnited(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task BurnIgnited(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var hits = new List<(uint Id, SpawnedMonster M, uint Life, int Damage)>();
         var ended = new List<(uint Id, ushort Buff)>();

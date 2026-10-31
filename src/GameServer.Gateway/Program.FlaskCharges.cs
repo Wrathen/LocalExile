@@ -9,7 +9,7 @@ partial class Program
     // every-3-seconds gains and the flask uses run on their own tasks, and the client must see their revisions in order,
     // each with the flask's latest charges. `change` makes the change and returns what to send (removed ids and the changed
     // items), or null for nothing.
-    static async Task ChangeFlaskBar(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task ChangeFlaskBar(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         Func<PlayerInventories, (uint[] Removed, List<InventoryItem> Changed)?> change, Func<List<InventoryItem>, string> log)
     {
         await conn.FlaskBarGate.WaitAsync();
@@ -41,7 +41,7 @@ partial class Program
 
     // A use's charges taken from the flask (still in its cell, with enough charges: checked again under the gate, as a
     // gain or another use may have run meanwhile) and sent (S→C 0xbf): the spent flask, or null when there were too few.
-    static async Task<InventoryItem?> SpendFlask(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task<InventoryItem?> SpendFlask(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         InventoryItem flask, Flasks.Flask charges, uint slot)
     {
         InventoryItem? spent = null;
@@ -66,7 +66,7 @@ partial class Program
     // times its gain multiplier (the character's increased flask charges gained, the flask's increased charge recovery),
     // whole charges now and the rest kept, up to its maximum with its mods; the changed flasks in one S→C 0xbf, saved with
     // the next save. The character's stats are only worked out when some flask that is not full gains.
-    static async Task GainFlaskCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task GainFlaskCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         Func<InventoryItem, IReadOnlyDictionary<string, int>, double> chargesFor, string why)
     {
         var gaining = new List<(InventoryItem Flask, IReadOnlyDictionary<string, int> Local, Flasks.Flask Charges, double Gain)>();
@@ -97,18 +97,19 @@ partial class Program
 
     internal static bool CanGainFlaskCharges(ClientState conn, InventoryItem flask)
     {
-        if (!conn.Ruthless || ItemsFor(conn).ByHash(flask.Item.TypeHash) is not { } type
+        var rules = LeagueFor(conn).Rules;
+        if (rules.UtilityFlaskChargesWhileActive || ItemsFor(conn).ByHash(flask.Item.TypeHash) is not { } type
             || ItemsFor(conn).UtilityFlaskOf(type) is null) return true;
         var active = conn.UtilityFlaskEffects.Of(flask.Id);
         bool running = active is not null && active.Ends > conn.Clock.Elapsed.TotalSeconds;
-        bool exception = Stats.Key("hard_mode_utility_flask_gain_charges_while_active") is uint key
+        bool exception = rules.UtilityFlaskExceptionStat is { } stat && Stats.Key(stat) is uint key
             && CharacterPlayerStats(conn).GetValueOrDefault(key) > 0;
-        return RuthlessGameplay.CanGainUtilityCharges(conn.Ruthless, running, exception);
+        return LeagueGameplay.CanGainUtilityCharges(!rules.UtilityFlaskChargesWhileActive, running, exception);
     }
 
     // A kill: 1 / 3.5 / 6 / 11 charges to every flask by the monster's rarity (FlaskCharges.KillCharges), or with
     // Game_FLASK_CHARGES=full every flask full.
-    static Task GainKillCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, MonsterRarity rarity, string why) =>
+    internal static Task GainKillCharges(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, MonsterRarity rarity, string why) =>
         FlaskCharges.FullShortcut ? GainFlaskCharges(remote, stream, ciphers, conn, int.MaxValue, why)
             : GainFlaskCharges(remote, stream, ciphers, conn, (_, _) => FlaskCharges.KillCharges(rarity, ItemsFor(conn).Mods), why);
 
@@ -116,7 +117,7 @@ partial class Program
     // a Critical Strike" (local_recharge_on_crit_%) rolls for one charge, and the character's chance and sure charges
     // (FlaskCharges.CritSources) go to the first flask that is not full. One cooldown for all of them
     // (FlaskCharges.CritCooldown), looked at before anything else.
-    static async Task GainFlaskChargesOnCrit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task GainFlaskChargesOnCrit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         if (!conn.FlaskChargeCarry.CritReady(now)) return;
@@ -135,12 +136,12 @@ partial class Program
     }
 
     // The player was hit (not evaded or blocked): "Gain # Charges when you are Hit by an Enemy" (local_flask_gain_X_charges_when_hit).
-    static Task GainFlaskChargesWhenHit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
+    internal static Task GainFlaskChargesWhenHit(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
         GainFlaskCharges(remote, stream, ciphers, conn, (_, local) => local.GetValueOrDefault("local_flask_gain_X_charges_when_hit"), "hit");
 
     // "Flasks gain # charges every 3 seconds" (FlaskCharges.PerThreeSeconds: every flask, utility, life, life on low life,
     // mana), every 3 s of game time (a pause holds it) while the connection is open.
-    static async Task RunFlaskChargeRegen(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunFlaskChargeRegen(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         double next = conn.Clock.Elapsed.TotalSeconds + 3;
         try
@@ -168,7 +169,7 @@ partial class Program
     }
 
     // A flask put on the flask bar in a hostile area has no charges (FlaskCharges.WhenEquipped).
-    static InventoryItem EmptyIfEquippedInHostileArea(ClientState conn, PlayerInventories items, InventoryItem placed)
+    internal static InventoryItem EmptyIfEquippedInHostileArea(ClientState conn, PlayerInventories items, InventoryItem placed)
     {
         var equipped = FlaskCharges.WhenEquipped(placed.Item, safeArea: InTown(conn) || HideoutCatalog.ByArea(conn.Layout.Hash) is not null);
         return equipped == placed.Item ? placed : items.Change(PlayerInventories.Flask, placed.Id, _ => equipped) ?? placed;

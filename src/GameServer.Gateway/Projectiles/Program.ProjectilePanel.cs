@@ -4,7 +4,7 @@ partial class Program
 {
     // These are native description inputs, projected only onto the outgoing skill record.
     // Never put final counts back into supported/raw stats and resolve quantity modifiers twice.
-    static void ApplyProjectilePanelStats(int effect, Dictionary<uint, int> stats)
+    internal static void ApplyProjectilePanelStats(int effect, Dictionary<uint, int> stats)
     {
         if (ResolveProjectilePanelParameters(effect) is not { } parameters) return;
         int Get(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;

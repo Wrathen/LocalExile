@@ -7,7 +7,7 @@ partial class Program
     internal static int MonsterImpaleDamage(SpawnedMonster target, double stored) =>
         MonsterTakesMitigated(target, DamagePacket.Of(DamageType.Physical, stored, stored), spell: false);
 
-    static (int Damage, double Reflected, bool Applied) WithImpaleHitLocked(ClientState conn, SpawnedMonster target,
+    internal static (int Damage, double Reflected, bool Applied) WithImpaleHitLocked(ClientState conn, SpawnedMonster target,
         int directDamage, DamagePacket rolled, bool critical, int sourceCriticalMultiplier,
         ImpaleStats.Settings settings, double hitMore = 1)
     {

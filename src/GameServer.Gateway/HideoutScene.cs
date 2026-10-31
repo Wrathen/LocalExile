@@ -1,10 +1,23 @@
 using GameServer.Core.Protocol.Instance;
+using GameServer.Modding;
 
 /// <summary>The functional furniture and NPCs of a hideout, placed on its own floor rather than Lush's coordinates.</summary>
 sealed record HideoutScene(HideoutCatalog.Doodad Stash, (int X, int Y) Guild,
-    HideoutCatalog.Doodad Bench, HideoutCatalog.Doodad Harvest, HideoutCatalog.Doodad Device, IReadOnlyList<NpcCatalog.Placement> Npcs)
+    HideoutCatalog.Doodad Bench, (int X, int Y) LargeStation, HideoutCatalog.Doodad Device, IReadOnlyList<NpcCatalog.Placement> Npcs)
 {
-    public HideoutCatalog.Doodad? Heist { get; init; }
+    /// <summary>A reserved spot, for a module's furniture.</summary>
+    public (int X, int Y) SmallStation { get; init; }
+
+    /// <summary>Where the character has moved things, by editor key.</summary>
+    public IReadOnlyDictionary<string, HideoutPlacement>? Saved { get; init; }
+
+    /// <summary>Where a module's station stands: moved by the character, else its reserved spot.</summary>
+    public (int X, int Y, float Rotation) Station(HideoutSlot slot, string editorKey)
+    {
+        if (Saved?.TryGetValue(editorKey, out var moved) == true) return (moved.X, moved.Y, moved.Rotation);
+        var (x, y) = slot == HideoutSlot.Large ? LargeStation : SmallStation;
+        return (x, y, 0);
+    }
 
     public static HideoutScene Build(HideoutCatalog.Hideout hideout, HideoutCatalog.Hideout fallback, Func<int, int, bool>? walkable)
     {
@@ -43,9 +56,8 @@ sealed record HideoutScene(HideoutCatalog.Doodad Stash, (int X, int Y) Guild,
         var bench = Template(HideoutCatalog.CraftingBenchType);
         var (bx, by) = Place(guild.X - 12, guild.Y + 12, 2);
         bench = bench with { X = bx, Y = by };
-        var (hx, hy) = Place(bx - 18, by + 18, 8);
-        var harvest = new HideoutCatalog.Doodad("Horticrafting Station", 0, HideoutCatalog.HorticraftingType,
-            null, hx, hy, 0, 0);
+        // Reserved whatever the modules are, so taking one away moves nothing else.
+        var large = Place(bx - 18, by + 18, 8);
         var device = hideout.Doodads.FirstOrDefault(HideoutCatalog.IsPlaced) ?? fallback.Doodads.First(HideoutCatalog.IsPlaced);
         // Retain the established Lush placement; every other template gets the same device beside its waypoint.
         var (mx, my) = Place(hideout.AreaId == HideoutCatalog.DefaultArea ? device.X : waypoint.X + 20,
@@ -57,10 +69,7 @@ sealed record HideoutScene(HideoutCatalog.Doodad Stash, (int X, int Y) Guild,
             var (x, y) = Place(waypoint.X + npc.X - origin.X, waypoint.Y + npc.Y - origin.Y, 4);
             npcs.Add(npc with { X = x, Y = y });
         }
-        var (lx, ly) = Place(sx + 16, sy + 16, 4);
-        return new(stash, guild, bench, harvest, device, npcs)
-        {
-            Heist = new("Heist Locker", 0, HideoutCatalog.HeistLockerType, null, lx, ly, 0, 0)
-        };
+        var small = Place(sx + 16, sy + 16, 4);
+        return new(stash, guild, bench, large, device, npcs) { SmallStation = small };
     }
 }

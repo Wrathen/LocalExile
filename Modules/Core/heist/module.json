@@ -1,0 +1,7 @@
+{
+  "id": "heist",
+  "version": "1.0.0",
+  "kind": "feature",
+  "depends": [],
+  "assembly": "bin/heist.dll"
+}

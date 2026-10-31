@@ -27,7 +27,7 @@ public sealed class UniqueCatalogModeTests
                 IsEssenceOnlyModifier = false,
             } });
             var ordinary = new UniqueCatalog(new ItemCatalog(folder), folder);
-            var ruthless = new UniqueCatalog(new ItemCatalog(folder, ruthless: true), folder);
+            var ruthless = new UniqueCatalog(new ItemCatalog(folder, hardMode: true), folder);
 
             var normalItem = ordinary.Create("Mageblood", new Random(1))!;
             var ruthlessItem = ruthless.Create("Mageblood", new Random(1))!;

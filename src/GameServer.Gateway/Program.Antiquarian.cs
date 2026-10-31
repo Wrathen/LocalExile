@@ -24,7 +24,7 @@ partial class Program
         }
     }
 
-    static void EnsureAntiquarianPools(ClientState conn)
+    internal static void EnsureAntiquarianPools(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -62,7 +62,7 @@ partial class Program
         return lifeDamage;
     }
 
-    static void ClearAntiquarianOnDeath(ClientState conn)
+    internal static void ClearAntiquarianOnDeath(ClientState conn)
     {
         if (conn.PlayerLife != 0) return;
         conn.Antiquarian.Clear(); conn.EnduringCryRecovery.Clear(); conn.Ward.SetMaximum(0);
@@ -114,12 +114,12 @@ partial class Program
         }
     }
 
-    static Task SendAntiquarian(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
+    internal static Task SendAntiquarian(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
         Send(remote, stream, ciphers, [], null, atGate: () => AntiquarianPresentation(conn));
 
-    sealed record AntiquarianTransfer(string Character, DateTime At, AntiquarianCombatState.Carried Buffs,
+    internal sealed record AntiquarianTransfer(string Character, DateTime At, AntiquarianCombatState.Carried Buffs,
         bool Broken, double WardSeconds, TimedLifeRecovery.Carried Cry);
-    static readonly ConcurrentDictionary<uint, AntiquarianTransfer> CarriedAntiquarian = new();
+    internal static readonly ConcurrentDictionary<uint, AntiquarianTransfer> CarriedAntiquarian = new();
 
     internal static void CarryAntiquarian(ClientState conn, uint ticket)
     {

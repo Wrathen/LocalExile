@@ -14,7 +14,7 @@ public class RuthlessGameplayTests
     [Fact]
     public void Scarcity_parameters_change_real_drop_generation_and_zero_disables_it()
     {
-        var catalog = new ItemCatalog(Data(), ruthless: true);
+        var catalog = new ItemCatalog(Data(), hardMode: true);
         var drops = new ItemDrops(catalog, new ItemRolls(catalog, Data()), Data());
         int normal = 0, scarce = 0;
         for (int seed = 0; seed < 200; seed++)

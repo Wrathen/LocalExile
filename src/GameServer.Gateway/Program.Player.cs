@@ -24,7 +24,7 @@ partial class Program
         if (GodCharacters.ContainsKey(CharacterName(conn))) conn.God = true;
     }
 
-    static async Task SetGod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool on)
+    internal static async Task SetGod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool on)
     {
         lock (conn.Monsters)
         {
@@ -47,7 +47,7 @@ partial class Program
 
     // The player's life per second from regeneration: the flat life regeneration per minute (/god, /set_stat) plus a
     // percentage of maximum life, from the row PanelStats.Recovery sends to the character panel.
-    static double LifeRegenPerSecond(ClientState conn)
+    internal static double LifeRegenPerSecond(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -59,7 +59,7 @@ partial class Program
     // The player's mana per second from regeneration: Character.ot's mana_regeneration_rate_per_minute_% (105: 1.75% of
     // maximum mana per second) plus the stats' flat base_mana_regeneration_rate_per_minute (/god), raised by
     // mana_regeneration_rate_+%.
-    static double ManaRegenPerSecond(ClientState conn)
+    internal static double ManaRegenPerSecond(ClientState conn)
     {
         var stats = CharacterPlayerStats(conn);
         int Get(string name) => Stats.Key(name) is uint k ? stats.GetValueOrDefault(k) : 0;
@@ -68,7 +68,7 @@ partial class Program
 
     // The mana the running auras reserve, and what is left for casting and regeneration.
     // Restoring an already enabled aura is not a fresh cast: transient mana availability must not discard its saved intent.
-    static IReadOnlyList<AuraCatalog.Aura> RestoreRememberedAuras(ClientState conn, IEnumerable<string> saved)
+    internal static IReadOnlyList<AuraCatalog.Aura> RestoreRememberedAuras(ClientState conn, IEnumerable<string> saved)
     {
         if (conn.Closed || conn.LeavingArea || conn.RageRetired || InTown(conn) || OwnAuraRestrictionValue(conn) != 0) return [];
         var wanted = saved.Select(AuraCatalog.Family).ToHashSet(StringComparer.Ordinal);
@@ -94,13 +94,13 @@ partial class Program
         return restored;
     }
 
-    static bool InGracePeriod(ClientState conn)
+    internal static bool InGracePeriod(ClientState conn)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         return conn.EntryProtection.Protects(now, conn.Walk.Position(now));
     }
 
-    static async Task StartGracePeriod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task StartGracePeriod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         ushort buff;
@@ -111,7 +111,7 @@ partial class Program
                 $"Grace Period: {GracePeriod.Seconds} seconds of entry protection");
     }
 
-    static async Task EndGracePeriod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool action = false)
+    internal static async Task EndGracePeriod(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool action = false)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         if (conn.EntryProtection.End(now, conn.Walk.Position(now), action) is ushort buff)
@@ -119,9 +119,9 @@ partial class Program
                 "Grace Period ends: movement, action or deadline");
     }
 
-    static bool InTown(ClientState conn) => WaypointCatalog.Areas.Find(conn.Layout.Hash) is { IsTown: true };
+    internal static bool InTown(ClientState conn) => WaypointCatalog.Areas.Find(conn.Layout.Hash) is { IsTown: true };
 
-    static async Task EndAurasOnDeath(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task EndAurasOnDeath(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (conn.PlayerLife != 0 || conn.AuraDeathHandled) return;
         conn.AuraDeathHandled = true;
@@ -144,10 +144,10 @@ partial class Program
         }
     }
 
-    static Task PlayerDied(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string label) =>
+    internal static Task PlayerDied(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string label) =>
         PlayerDiedAtEpoch(remote, stream, ciphers, conn, label);
 
-    static async Task PlayerDiedAtEpoch(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task PlayerDiedAtEpoch(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         string label, int? expectedEpoch = null)
     {
         int deathEpoch;
@@ -166,9 +166,9 @@ partial class Program
             ClearBloodChargesOnDeath(conn);
             ClearAntiquarianOnDeath(conn);
         }
-        foreach (var (id, life) in RecoverRuthlessBossesOnDeath(conn))
-            await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(id, life), $"Ruthless campaign boss 0x{id:x} recovers to {life} life after player death");
-        PersistRuthlessVitals(conn, bestEffort: true);
+        foreach (var (id, life) in RecoverBossesOnDeath(conn))
+            await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(id, life), $"boss 0x{id:x} recovers to {life} life after player death");
+        PersistVitals(conn, bestEffort: true);
         await SendVaalSouls(remote, stream, ciphers, conn);
         await SendRage(remote, stream, ciphers, conn);
         await EndAurasOnDeath(remote, stream, ciphers, conn);
@@ -182,7 +182,7 @@ partial class Program
         });
     }
 
-    static int ReservedMana(ClientState conn)
+    internal static int ReservedMana(ClientState conn)
     {
         lock (conn.Monsters)
         {
@@ -191,12 +191,12 @@ partial class Program
         }
     }
 
-    static int UnreservedMana(ClientState conn) => Math.Max(0, (int)conn.Pools.Mana - ReservedMana(conn));
+    internal static int UnreservedMana(ClientState conn) => Math.Max(0, (int)conn.Pools.Mana - ReservedMana(conn));
 
     // 0x1b1 for the mana pool: every update carries the reserved amount, or the client would clear it. The pool and the
     // reservation are read under one lock, so a packet never pairs a pool from before an aura toggle with the
     // reservation from after it.
-    static async Task SendPlayerMana(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task SendPlayerMana(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         string? log = null)
     {
         await Send(remote, stream, ciphers, [], log, atGate: () =>
@@ -216,7 +216,7 @@ partial class Program
         await SendPlayerEnergyShield(remote, stream, ciphers, conn);
     }
 
-    static Task SendPlayerEnergyShield(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
+    internal static Task SendPlayerEnergyShield(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn) =>
         Send(remote, stream, ciphers, [], "0x01b1 player energy shield", atGate: () =>
         {
             // Sample and deduplicate after earlier sends: a queued pool change can clamp ES or end recharge.
@@ -253,7 +253,7 @@ partial class Program
 
     // A gem skill's mana cost at the gem's level (its mana_cost stat), paid when the cast starts. False when the player lacks
     // the mana.
-    static bool PayMana(ClientState conn, ushort skillId, out uint cost)
+    internal static bool PayMana(ClientState conn, ushort skillId, out uint cost)
     {
         var own = SupportedSkill(conn, skillId).Stats;
         int Own(string name) => Stats.Key(name) is uint key ? own.GetValueOrDefault(key) : 0;
@@ -272,7 +272,7 @@ partial class Program
     // A genuine spell's final server wait; native actions instead receive the unadjusted base milliseconds.
     // Null refuses an invalid/unrepresentable cast rather than turning it into an immediate hit. A supported skill's
     // own base_cast_speed_+% (skillId) adds to the player's.
-    static int? CastMs(ClientState conn, int effect, ushort skillId = 0)
+    internal static int? CastMs(ClientState conn, int effect, ushort skillId = 0)
     {
         var own = skillId == 0 ? new Dictionary<uint, int>() : SupportedSkill(conn, skillId).Stats;
         int speed = CastSpeedPct(CharacterPlayerStats(conn));
@@ -282,7 +282,7 @@ partial class Program
     }
 
     // cast_speed_+% is the total (PanelStats: base_cast_speed_+% and attack_and_cast_speed_+% are already in it).
-    static int CastSpeedPct(IReadOnlyDictionary<uint, int> stats) =>
+    internal static int CastSpeedPct(IReadOnlyDictionary<uint, int> stats) =>
         Stats.Key("cast_speed_+%") is uint k ? stats.GetValueOrDefault(k) : 0;
 
     // Righteous Fire (GrantedEffects RighteousFire): casting it puts the righteous_fire buff (BuffDefinitions row 12: the
@@ -291,11 +291,11 @@ partial class Program
     // within its radius (active_skill_base_area_of_effect_radius 18 cells at level 1, plus their size) take 70% of the
     // player's maximum life per second as fire damage (base_righteous_fire_%_of_max_life_to_deal_to_nearby_per_minute 4200)
     // and carry the righteous_fire_aura buff (row 13). It ends at death or on leaving the area; casting it again does nothing.
-    static bool IsRighteousFire(int effect) => Skills.EffectId(effect) == "RighteousFire";
+    internal static bool IsRighteousFire(int effect) => Skills.EffectId(effect) == "RighteousFire";
 
     // The skill_art_variation of the skill effects worn in a gem type's Cosmetics tab slots (0: none), which picks the
     // skill's art (SkillArt).
-    static int SkillArtVariation(ClientState conn, uint gem) =>
+    internal static int SkillArtVariation(ClientState conn, uint gem) =>
         Stats.Key("skill_art_variation") is not uint key ? 0
         : CharacterSaves.SkillCosmetics(CharacterName(conn)).Where(kv => CharacterSaves.SkillCosmeticGem(kv.Key) == gem)
             .SelectMany(kv => Mtx.Find(kv.Value.Record) is { } r && MtxEffects.Of(r.MtxTypeHash) is { } fx ? fx.Stats : [])
@@ -306,7 +306,7 @@ partial class Program
     // RingFollowMs later, along the walk's path. Before 2026-10-23 it glided once per ground click to where that walk
     // ended: a walk started any other way (a click on a stash or an item, C→S 0x24 → Walk.Approach) never moved it, and
     // the straight glide cut the path's corners.
-    static async Task FollowRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task FollowRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (conn.RighteousFire is not { Ring: uint ring } rf) return;
         double now = conn.Clock.Elapsed.TotalSeconds;
@@ -317,7 +317,7 @@ partial class Program
     }
 
     // The ring's follow loop, while its fire burns.
-    static async Task RunRingFollow(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, RighteousFireState rf)
+    internal static async Task RunRingFollow(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, RighteousFireState rf)
     {
         try
         {
@@ -333,7 +333,7 @@ partial class Program
         }
     }
 
-    static async Task ActivateRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, ushort skillId,
+    internal static async Task ActivateRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, ushort skillId,
         int effect, int level, int quality, uint gem)
     {
         ushort buff, aura;
@@ -387,7 +387,7 @@ partial class Program
         }
     }
 
-    static async Task EndRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
+    internal static async Task EndRighteousFire(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, string why)
     {
         RighteousFireState? rf;
         List<(uint Monster, ushort Buff)> auras;
@@ -409,7 +409,7 @@ partial class Program
 
     // The slower player tick: RF on nearby enemies, suppression conditions, waypoints, auto-loot and quests.
     // Continuous player pool changes are handled by RunResourceRecovery instead.
-    static async Task RunPlayerTick(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunPlayerTick(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         if (conn.Closed || conn.RageRetired) return;
         double last = conn.Clock.Elapsed.TotalSeconds;
@@ -425,7 +425,7 @@ partial class Program
             double seconds = tickNow - last;
             last = tickNow;
             if (conn.LeavingArea || conn.Paused || seconds <= 0) continue;
-            await ServerMods.Tick(PlayerOf(conn), seconds);
+            await ServerHooks.Tick(PlayerOf(conn), seconds);
             if (LeechContext(conn) is var currentLeech && currentLeech != leechContext)
             {
                 leechContext = currentLeech;
@@ -503,7 +503,7 @@ partial class Program
 
     // One writer for continuous recovery: regeneration, flask recovery and the player's RF burn.
     // The game clock excludes pause; scheduling/network delays change the step size, never the per-second rate.
-    static async Task RunResourceRecovery(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunResourceRecovery(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         double lifeCarry = 0, manaCarry = 0, burnCarry = 0, last = conn.Clock.Elapsed.TotalSeconds;
         double ratesAt = double.NegativeInfinity, lifeRate = 0, manaRate = 0, burnPerSecond = 0;
@@ -536,9 +536,9 @@ partial class Program
                     ratesAt = double.NegativeInfinity;
                     continue;
                 }
-                if (conn.Ruthless && now >= nextVitalsSave)
+                if (LeagueFor(conn).Rules.PersistsVitals && now >= nextVitalsSave)
                 {
-                    PersistRuthlessVitals(conn, bestEffort: true);
+                    PersistVitals(conn, bestEffort: true);
                     nextVitalsSave = now + 5;
                 }
                 double seconds = now - last;
@@ -628,7 +628,7 @@ partial class Program
     }
 
     // The ended flask effects' buffs come off the player (S→C 0x1c2).
-    static async Task EndFlaskEffects(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, List<Flasks.Effect> ended, string why)
+    internal static async Task EndFlaskEffects(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, List<Flasks.Effect> ended, string why)
     {
         foreach (var e in ended)
             if (FlaskBuffs && e.Buff != 0) await Send(remote, stream, ciphers, InstanceEntities.RemoveBuff(PlayerId, e.Buff), $"0x01c2 player buff {e.Buff}: flask {e.Slot} effect ends ({why})");
@@ -637,7 +637,7 @@ partial class Program
 
     // Righteous Fire's damage to the hostile monsters within its radius for one tick, with their aura buff on while they
     // are inside.
-    static async Task BurnAround(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, RighteousFireState rf, double seconds)
+    internal static async Task BurnAround(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, RighteousFireState rf, double seconds)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         double perSecond = (conn.PlayerMaxLife * (double)rf.DamagePctPerMinute + conn.Pools.EnergyShield * (double)rf.EnergyShieldDamagePctPerMinute) / 6000.0;
@@ -702,7 +702,7 @@ partial class Program
     // Act 10 Kitava. It is a quest penalty, not a buff/aura: the client keeps it through its quest flags, and the server
     // mirrors it from the same flags. (In the 3.29.3b tables the flags are a5q6-CompletedBoss and a10q3-SeenBoss /
     // a10q3-UsedRewardBook; a9q5-KilledBoss is the Act 9 boss and does not grant it.)
-    static int ResistancePenalty(ClientState conn)
+    internal static int ResistancePenalty(ClientState conn)
     {
         bool act5, act10;
         lock (conn.Monsters)
@@ -714,11 +714,11 @@ partial class Program
     }
 
     // Whether a quest-flag change moves the Kitava resistance penalty.
-    static bool ChangesResistancePenalty(IEnumerable<string> changed) =>
+    internal static bool ChangesResistancePenalty(IEnumerable<string> changed) =>
         changed.Any(ResistancePenaltyAct5.Concat(ResistancePenaltyAct10).Contains);
 
     // The player's final resistance for one damage type: the passive/gear modifier plus the Kitava quest penalty.
-    static int Resistance(ClientState conn, DamageType type)
+    internal static int Resistance(ClientState conn, DamageType type)
     {
         int modifier = type switch
         {
@@ -732,7 +732,7 @@ partial class Program
     }
 
     // The per-type maximum from Character.ot's 75 plus the passive/gear maximum-resistance modifiers, hard-capped at 90.
-    static int MaxResistance(ClientState conn, DamageType type) => type switch
+    internal static int MaxResistance(ClientState conn, DamageType type) => type switch
     {
         DamageType.Fire => conn.Pools.FireMaxResistance,
         DamageType.Cold => conn.Pools.ColdMaxResistance,
@@ -742,7 +742,7 @@ partial class Program
     };
 
     // Damage immunities as the damage model sees them, from the same sources the panel's "Immune to X" rows use.
-    static HashSet<DamageType> PlayerImmunities(ClientState conn)
+    internal static HashSet<DamageType> PlayerImmunities(ClientState conn)
     {
         if (InGracePeriod(conn)) return [.. Enum.GetValues<DamageType>()];
         var baseStats = new Dictionary<uint, int>();
@@ -755,7 +755,7 @@ partial class Program
     // Spell Suppression: chance in 0..100 with the conditional passives that hold now (full life, full energy shield,
     // moving, an enemy hit in the last 4 s: PoB's "recently"), the reduction on a successful suppress (40% by default)
     // and its lucky or unlucky roll (PoB's suppressRolls).
-    static (int Chance, int Effect, bool Lucky, bool Unlucky) Suppression(ClientState conn)
+    internal static (int Chance, int Effect, bool Lucky, bool Unlucky) Suppression(ClientState conn)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
         bool fullLife, fullEnergyShield, hitRecently;
@@ -771,7 +771,7 @@ partial class Program
             conn.Pools.SpellSuppressionLucky, conn.Pools.SpellSuppressionUnlucky);
     }
 
-    static DamageType? ParseDamageType(string text) => text.ToLowerInvariant() switch
+    internal static DamageType? ParseDamageType(string text) => text.ToLowerInvariant() switch
     {
         "fire" => DamageType.Fire,
         "cold" => DamageType.Cold,
@@ -785,7 +785,7 @@ partial class Program
     // checkpoint" revives next to the area's activated waypoint, else at its arrival point (teleport 0x1b7, AreaLayout.Checkpoint),
     // "in town" in the character's last town (an area change;
     // in that town it is the same as the checkpoint).
-    static async Task Resurrect(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool inTown)
+    internal static async Task Resurrect(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, bool inTown)
     {
         // The native button is hidden for HC, but a forged 0x54 must not revive the old character in its source league.
         if (conn.Hardcore || conn.HardcoreDeathRecorded) return;
@@ -799,7 +799,7 @@ partial class Program
             conn.HitRecovery.Clear();
             conn.Ward.SetMaximum(conn.Pools.Ward); conn.Ward.Restore();
             conn.AuraDeathHandled = false;
-            conn.RuthlessDeathHandled = false;
+            conn.BossRecoveryHandled = false;
             conn.PlayerMana = (uint)UnreservedMana(conn);
             foreach (var m in conn.Monsters.Values) m.Aggro = false;
         }
@@ -835,7 +835,7 @@ partial class Program
 
     // The player in its class: the Characters.dat row's object type (Metadata/Characters/StrInt/StrInt for the Templar), model
     // (AOFile), class byte (IntegerId), attributes and unarmed attack; the name is the character's.
-    static PlayerObject PlayerForCreation(ClientState conn)
+    internal static PlayerObject PlayerForCreation(ClientState conn)
     {
         var (layout, name, classRow, pools) = (conn.Layout, conn.Character, conn.ClassRow, conn.Pools);
         var cls = SkillsFor(conn).ClassFor(classRow);
@@ -872,7 +872,7 @@ partial class Program
         }
     }
 
-    static async Task SendPlayer(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task SendPlayer(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         RestoreFortification(conn);
         PrepareHideoutWaypoint(conn);
@@ -918,12 +918,7 @@ partial class Program
             bool secondSet = PlayerInventories.For(string.IsNullOrEmpty(name) ? "Exile" : name, ItemsFor(conn)).WeaponSet == 1;
             messages.Add(($"0x0021 enter area, {tabs.Count} stash tab(s), last {PersonalStashOf(conn).LastTab}, weapon set {(secondSet ? 2 : 1)}",
                 InstanceProtocol.EnterArea(tabs, secondSet)));
-            // The Delve data (0x228) in the Azurite Mine Encampment and the mine: the gauge and the Subterranean Chart
-            // read the character's sulphite from it.
-            if (layout.Id.StartsWith("Delve", StringComparison.Ordinal))
-            {
-                messages.Add(("0x0228 Delve resources and equipment", PlayerDelveData(conn)));
-            }
+            messages.AddRange(ServerHooks.EnterMessages(PlayerOf(conn)));
             // The contents of every stash tab with currency in it (stackable items), as 0xc7 would send them (0xc0, no 0xc8:
             // the panel is not open). The client checks a shop price against the currency it knows of, the inventory's and
             // the loaded stash tabs' (3.29 vendors take it from the stash): without this a price was red, and no 0x88 came,

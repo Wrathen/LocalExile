@@ -178,7 +178,7 @@ public sealed class AreaInstanceState(ulong id, ushort areaHash, bool isTown, ui
     public bool IsTown { get; } = isTown;
     public uint Seed { get; } = seed;
     public DateTimeOffset Created { get; } = created;
-    /// <summary>Canonical full league identity: Hardcore, SSF and Ruthless variants are separate economies.</summary>
+    /// <summary>Canonical full league identity: Hardcore, SSF and form variants are separate economies.</summary>
     public string League { get; } = league;
     /// <summary>SSF non-town instances are private to this character, including after leaving and re-entering.</summary>
     public string? SoloOwner { get; } = soloOwner;

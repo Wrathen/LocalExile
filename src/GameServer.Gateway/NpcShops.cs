@@ -83,10 +83,11 @@ static class NpcShops
     /// Unknown, unwritable or oversized item types are skipped and named in <paramref name="notes"/>.</summary>
     public static List<ShopTab> Tabs(string npcId, ItemCatalog items, Func<uint> nextId, List<string> notes,
         string dataFolder = "data", IReadOnlyCollection<int>? gemStock = null,
-        Func<ItemCatalog.BaseType, (string Currency, int Amount)>? gemPrice = null, bool fullGemStock = false, bool ruthless = false)
+        Func<ItemCatalog.BaseType, (string Currency, int Amount)>? gemPrice = null, bool fullGemStock = false, bool hardMode = false, LeagueRules? rules = null)
     {
-        fullGemStock &= !ruthless;
-        var ruthlessPrices = ruthless ? new RuthlessShopPrices(items, dataFolder) : null;
+        rules ??= LeagueRules.Standard;
+        fullGemStock &= rules.FullGemStock;
+        var hardModePrices = hardMode ? new HardModeShopPrices(items, dataFolder) : null;
         var currency = items.Find(Currency);
         if (currency is null) notes.Add($"no item type {Currency}: the stock has no prices");
         Item Priced(Item item) => currency is null ? item : item with { Price = [(currency.Hash, (uint)PriceInCurrency)] };
@@ -107,16 +108,15 @@ static class NpcShops
             if (items.Find(name) is { Supported: true } type && type.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) stock.Add((type, count, null));
             else notes.Add($"no writable item type {name}");
         }
-        if (!ruthless && SellsMaps.Contains(npcId))
+        if (rules.SellsMaps && SellsMaps.Contains(npcId))
             stock.AddRange(NessaMapStock.Build(items, dataFolder).Select(m => (m.Type, 1, (Item?)m.Item)));
-        if (ruthless)
-            stock.RemoveAll(s => s.Type.Components.Contains("SkillGem") || s.Type.Class is "Ring" or "Amulet" or "Belt"
-                || ruthlessPrices!.For(s.Type) is null);
+        stock.RemoveAll(s => (!rules.SellsGemsInGoods && s.Type.Components.Contains("SkillGem")) || rules.ShopExcludedClasses.Contains(s.Type.Class)
+            || (hardMode && hardModePrices!.For(s.Type) is null));
         // Goods, then Goods2, Goods3 … for what does not fit.
         for (int page = 1; stock.Count > 0 || page == 1; page++)
             tabs.Add(new(page == 1 ? "Goods" : $"Goods{page}", Lay(stock, items,
-                (type, item) => ruthlessPrices?.For(type) is { } price ? item with { Price = [price] } : Priced(item), nextId, notes)));
-        if (GemVendorStock.Sells(npcId) && (!ruthless || npcId.EndsWith("/Siosa", StringComparison.OrdinalIgnoreCase)))
+                (type, item) => hardModePrices?.For(type) is { } price ? item with { Price = [price] } : Priced(item), nextId, notes)));
+        if (GemVendorStock.Sells(npcId) && rules.SellsGemsAt(npcId))
         {
             // Future progression shop, deliberately separate from the complete development assortment.
             // Missing progression input must never unlock everything in this tab.
@@ -132,7 +132,7 @@ static class NpcShops
                     tabs.Add(new(page == 1 ? "Skills" : $"Skills {page}",
                         Lay(unlocked, items, PricedGem, nextId, notes, separateGemKinds: true)));
             }
-            foreach (var (name, colour, support) in GemTabs.Where(g => !ruthless || !g.Support))
+            foreach (var (name, colour, support) in GemTabs.Where(g => rules.SellsSupportGems || !g.Support))
             {
                 var gems = fullGemStock
                     ? items.FullShopGems(colour, support)
@@ -140,12 +140,12 @@ static class NpcShops
                         .Select(g => (g.Type, 1,
                         (Item?)(ItemCatalog.Create(g.Type) with { GemVariant = g.Variant.Index }))).ToList()
                     : items.ShopGems(colour, support)
-                        .Where(t => (gemStock is null ? !ruthless : gemStock.Contains(t.Row))
-                            && (!ruthless || (!support && ruthlessPrices!.For(t) is not null)))
+                        .Where(t => (gemStock is null ? !hardMode : gemStock.Contains(t.Row))
+                            && (!hardMode || hardModePrices!.For(t) is not null))
                         .Select(t => (t, 1, (Item?)null)).ToList();
                 for (int page = 1; gems.Count > 0 || page == 1; page++)
                     tabs.Add(new(page == 1 ? name : $"{name} {page}", Lay(gems, items,
-                        (type, item) => ruthlessPrices?.For(type) is { } price ? item with { Price = [price] } : PricedGem(type, item), nextId, notes)));
+                        (type, item) => hardModePrices?.For(type) is { } price ? item with { Price = [price] } : PricedGem(type, item), nextId, notes)));
             }
         }
         return tabs;

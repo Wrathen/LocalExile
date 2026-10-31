@@ -11,7 +11,7 @@ partial class Program
     /// Damage per Use (these skills ask for the average, not DPS) and the secondary ailment rows. Display rows only:
     /// the trap's and herald's actual hits are not executed by the server.
     /// </summary>
-    static List<(string Stat, int Value)> SecondaryPanelRows(ClientState conn, Func<string, int> get,
+    internal static List<(string Stat, int Value)> SecondaryPanelRows(ClientState conn, Func<string, int> get,
         IReadOnlyDictionary<uint, int> player, SupportedGem supported, DamagePacket secondaryBase)
     {
         int Player(string name) => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0;

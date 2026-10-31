@@ -4,7 +4,7 @@ using GameServer.Core.World;
 
 partial class Program
 {
-    static void CommitBossStage(string remote, System.Net.Sockets.NetworkStream stream,
+    internal static void CommitBossStage(string remote, System.Net.Sockets.NetworkStream stream,
         GameServer.Core.Protocol.Login.ConnectionCiphers ciphers, ClientState conn, uint id, SpawnedMonster monster, double at)
     {
         var session = ProjectilesFor(remote, stream, ciphers, conn);
@@ -12,7 +12,7 @@ partial class Program
     }
 
     // Called synchronously under XP -> combat lock. The outbox contains notifications of committed results.
-    static void CommitProjectileHit(ProjectileSession session, ProjectileDamage contact, SpawnedMonster target,
+    internal static void CommitProjectileHit(ProjectileSession session, ProjectileDamage contact, SpawnedMonster target,
         MonsterHit hit, int damage, ProjectileOffense shot, bool critical)
     {
         var conn = session.Conn;
@@ -63,7 +63,7 @@ partial class Program
         }
     }
 
-    static void CommitProjectileBossStage(ProjectileSession session, uint id, SpawnedMonster monster, long at)
+    internal static void CommitProjectileBossStage(ProjectileSession session, uint id, SpawnedMonster monster, long at)
     {
         var stage = monster.Stage!;
         double now = at / (double)ProjectileRuntime.QuantaPerSecond;
@@ -81,7 +81,7 @@ partial class Program
         });
     }
 
-    static void CommitProjectileKill(ProjectileSession session, uint id, SpawnedMonster monster, long at, Random random)
+    internal static void CommitProjectileKill(ProjectileSession session, uint id, SpawnedMonster monster, long at, Random random)
     {
         var conn = session.Conn;
         var position = monster.Walk.Position(at / (double)ProjectileRuntime.QuantaPerSecond);
@@ -90,30 +90,17 @@ partial class Program
         // The mods (Program.Mods.cs) as in MonsterKilled: their modifiers here, inside the commit; the kill after it.
         var killer = PlayerOf(conn);
         var modMonster = ModMonster(monster, position);
-        session.Enqueue(() => ServerMods.MonsterKilled(new(killer, modMonster)));
+        session.Enqueue(() => ServerHooks.MonsterKilled(new(killer, modMonster)));
         ChargesOnKill(conn, monster);
-        StealMonsterMods(conn, monster);
-        if (conn.Layout.Id == TutorialObjects.Strand && variety.Id == TutorialObjects.Zombie
-            && CharacterSaves.Load(CharacterName(conn))?.Tutorial is { ZombieKilled: false })
-        {
-            CharacterSaves.ChangeTutorial(CharacterName(conn), t => t with { ZombieKilled = true });
-            if (CharacterSaves.Load(CharacterName(conn))?.Tutorial is { SkillClaimed: false } tutorial)
-            {
-                var item = CharacterSaves.FromSaved(tutorial.SkillGem, Items);
-                var ground = new WorldItemObject(position.X, position.Y, item);
-                if (conn.Instance.PlaceTutorialItem(TutorialObjects.DropKey(CharacterName(conn), tutorial, false), ground) is uint groundId)
-                    PublishProjectileGroundItem(session, groundId, ground);
-            }
-        }
         if (CommitQuestFlags(conn, Quests.OnMonsterKilled(conn.Layout.Id, variety.Id)) is { } quest)
             session.Enqueue(() => PublishQuestFlags(session.remote, session.stream, session.ciphers, conn, quest));
-        if (MercyMission.DropsChest(conn.Layout.Id, variety.Id) && MedicineChestType() is { } chest
-            && MercyMission.HailrakeDrops(chest.Hash, MercyDone(conn), ItemsOf(conn), conn.Instance.Ground))
-            AddProjectileGroundItem(session, new(position.X, position.Y, ItemCatalog.Create(chest)));
+        var kill = new KillContext(conn, monster, variety.Id, position);
+        foreach (var run in GameEvents.Kill.For(conn)) run(kill);
+        foreach (var send in kill.Afterwards) session.Enqueue(send);
         uint xp = 0;
         if (conn.PlayerLife > 0 && Dist(position, conn.Walk.Position(at / (double)ProjectileRuntime.QuantaPerSecond)) <= ExperienceRange
             && Monsters.BaseExperience(variety, monster.Level) is int baseXp)
-            xp = ServerMods.Experience(killer, modMonster,
+            xp = ServerHooks.Experience(killer, modMonster,
                 Progression.MonsterExperience(baseXp, variety.ExperienceMultiplier, monster.Rarity, conn.Pools.Level, monster.Level));
         var (gemPackets, leveled) = CommitGemExperience(conn, xp);
         foreach (var packet in gemPackets) session.Packet(packet);
@@ -142,14 +129,14 @@ partial class Program
             : FlaskCharges.KillCharges(monster.Rarity, ItemsFor(conn).Mods));
         if (Environment.GetEnvironmentVariable("Game_DROPS") != "0")
         {
-            var balance = conn.Ruthless ? RuthlessSettings.Current : null;
-            var modded = ServerMods.Drops(killer, modMonster);
+            var balance = LeagueFor(conn).Rules;
+            var modded = ServerHooks.Drops(killer, modMonster);
             List<ItemDrops.Drop> drops = [];
             if (modded is not { Cancel: true })
             {
                 drops.AddRange(DropsFor(conn).Roll(monster.Level, monster.Rarity, random, IncreasedItemRarity(conn),
-                    (balance?.ItemDropMultiplier ?? 1) * (modded?.Quantity ?? 1) * ItemQuantityFactor(conn), (balance?.EquipmentRarityMultiplier ?? 1) * (modded?.Rarity ?? 1)));
-                if (DropsFor(conn).Gold(monster.Level, monster.Rarity, random, (balance?.GoldMultiplier ?? 1) * (modded?.Gold ?? 1)) is { } gold) drops.Add(gold);
+                    balance.ItemDropMultiplier * (modded?.Quantity ?? 1) * ItemQuantityFactor(conn), balance.EquipmentRarityMultiplier * (modded?.Rarity ?? 1)));
+                if (DropsFor(conn).Gold(monster.Level, monster.Rarity, random, balance.GoldMultiplier * (modded?.Gold ?? 1)) is { } gold) drops.Add(gold);
             }
             foreach (string query in modded?.Items ?? [])
                 if (ModDrop(conn, query, monster.Level) is { } extra) drops.Add(extra);
@@ -164,16 +151,16 @@ partial class Program
         }
     }
 
-    static void AddProjectileGroundItem(ProjectileSession session, WorldItemObject ground) =>
+    internal static void AddProjectileGroundItem(ProjectileSession session, WorldItemObject ground) =>
         PublishProjectileGroundItem(session, session.Conn.Instance.Ground.Add(ground), ground);
 
-    static void PublishProjectileGroundItem(ProjectileSession session, uint id, WorldItemObject ground)
+    internal static void PublishProjectileGroundItem(ProjectileSession session, uint id, WorldItemObject ground)
     {
         session.Packet(InstanceEntities.CreateObject(id, InstanceEntities.ObjectTypeHash(WorldItemObject.MetadataPath), ground.Blob()));
         session.Packet(InstanceProtocol.EnterWakeZone(id));
     }
 
-    static void CommitProjectileFlaskGain(ProjectileSession session,
+    internal static void CommitProjectileFlaskGain(ProjectileSession session,
         Func<InventoryItem, IReadOnlyDictionary<string, int>, double> gain)
     {
         var conn = session.Conn;
@@ -197,7 +184,7 @@ partial class Program
                 items.NextRevision(PlayerInventories.Flask), [.. changed.Select(i => i.Id)], changed));
     }
 
-    static void CommitProjectileCritFlasks(ProjectileSession session, double at, Random random)
+    internal static void CommitProjectileCritFlasks(ProjectileSession session, double at, Random random)
     {
         var conn = session.Conn;
         if (!conn.FlaskChargeCarry.CritReady(at)) return;

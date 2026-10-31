@@ -1,0 +1,10 @@
+{
+  "name": "SSF Standard",
+  "parent": "Standard",
+  "base": "Standard",
+  "hardcore": false,
+  "ssf": true,
+  "entryOf": "Standard",
+  "entryKind": "ssf",
+  "description": "The default game mode. Solo Self-Found: no trading or parties."
+}

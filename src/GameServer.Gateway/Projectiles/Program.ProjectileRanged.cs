@@ -23,7 +23,7 @@ partial class Program
     // An ordinary bow or wand shot on the shared runtime. The release waits for the weapon's contact (attack1_bow, or
     // the ACT-selected wand clip for this input's sequence), then freezes damage, chance and multiplier; conditional
     // critical rules read the live owner at impact, and target evasion and impales resolve at contact.
-    static Task ScheduleOrdinaryRanged(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static Task ScheduleOrdinaryRanged(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         (int X, int Y) aim, double attackSeconds, int action, int epoch, string projectileId, ushort sequence,
         SkillCriticalRoll criticalRoll)
     {

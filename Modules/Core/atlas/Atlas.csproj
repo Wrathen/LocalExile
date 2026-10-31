@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Atlas passive tree's choices. (Agents/docs/dev/modules.md). Everything else is in Directory.Build.props. -->
+
+</Project>

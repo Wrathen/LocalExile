@@ -133,7 +133,7 @@ public sealed class CharacterAreaAdmissionTests
             TestSaves.Ensure();
             State = new(new(AreaLayouts.LioneyesWatch, "AdmissionTown", 128, 128, 32, 32, null, []), 0, 1)
             { Character = Name, Account = Name, League = ruthless ? "Ruthless" : "Standard", ClassRow = 4,
-                Ruthless = ruthless };
+                LeagueForm = ruthless ? "ruthless" : null };
             var definition = Program.Ascendancies.Find(4, AscendancyFamily.Normal, "Slayer");
             Assert.NotNull(definition);
             var type = Program.ItemsFor(State).Find("Metadata/Items/Flasks/FlaskLife1");

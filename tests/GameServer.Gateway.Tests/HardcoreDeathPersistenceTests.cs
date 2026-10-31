@@ -29,7 +29,7 @@ public class HardcoreDeathPersistenceTests : IDisposable
         using (var db = new SaveDatabase(DbPath))
         {
             original = Seed(db);
-            var dead = HardcoreDeathPersistence.Commit(db, original.Name, LeagueCatalog.Default.Find(original.League)!,
+            var dead = HardcoreDeathPersistence.Commit(db, original.Name, LeagueCatalog.FromEnvironment().Find(original.League)!,
                 () => db.Put(SaveDatabase.Table.Characters, original.Name, "{\"carriedItems\":[1,2,3],\"xp\":150}"), DiedAt);
             Assert.Equal("SSF Allflame", dead.League);
         }

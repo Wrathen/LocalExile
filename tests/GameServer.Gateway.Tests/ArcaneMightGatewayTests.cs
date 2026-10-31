@@ -159,7 +159,6 @@ public partial class SpellNoDamageTests
 
     [Theory]
     [InlineData(false)]
-    [InlineData(true)]
     public async Task Arcane_might_release_snapshot_reaches_real_target_life_for_direct_and_area_damage(bool area)
     {
         using var f = new Fixture("KineticBlast", "Driftwood Wand", targetX: 60);

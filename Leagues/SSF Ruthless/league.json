@@ -1,0 +1,15 @@
+{
+  "name": "SSF Ruthless",
+  "parent": "SSF Standard",
+  "base": "Standard",
+  "hardcore": false,
+  "ssf": true,
+  "form": "ruthless",
+  "entryOf": "SSF Standard",
+  "entryKind": "form",
+  "description": "Ruthless: extreme item scarcity. Solo Self-Found.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

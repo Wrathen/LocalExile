@@ -1,0 +1,15 @@
+{
+  "name": "SSF Ruthless Allflame",
+  "parent": "Ruthless Allflame",
+  "base": "Allflame",
+  "hardcore": false,
+  "ssf": true,
+  "form": "ruthless",
+  "entryOf": "SSF Allflame",
+  "entryKind": "form",
+  "description": "Plunder sunken treasures and harness the power of the Allflame. Ruthless: extreme item scarcity. Solo Self-Found.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

@@ -10,6 +10,25 @@
     <Project Path="src/GameServer.Patch/GameServer.Patch.csproj" />
     <Project Path="src/GameServer.Storage/GameServer.Storage.csproj" />
   </Folder>
+  <Folder Name="/Modules/">
+    <Project Path="Modules/Core/delve/Delve.csproj" />
+    <Project Path="Modules/Core/harvest/Harvest.csproj" />
+    <Project Path="Modules/Core/heist/Heist.csproj" />
+    <Project Path="Modules/Core/hideoutediting/HideoutEditing.csproj" />
+    <Project Path="Modules/Core/commands/Commands.csproj" />
+    <Project Path="Modules/Core/vendors/Vendors.csproj" />
+    <Project Path="Modules/Core/portals/Portals.csproj" />
+    <Project Path="Modules/Core/questobjects/QuestObjects.csproj" />
+    <Project Path="Modules/Core/uniquebelts/UniqueBelts.csproj" />
+    <Project Path="Modules/Core/mercy/Mercy.csproj" />
+    <Project Path="Modules/Core/tattoos/Tattoos.csproj" />
+    <Project Path="Modules/Core/cosmetics/Cosmetics.csproj" />
+    <Project Path="Modules/Core/bench/Bench.csproj" />
+    <Project Path="Modules/Core/atlas/Atlas.csproj" />
+    <Project Path="Modules/Core/social/Social.csproj" />
+    <Project Path="Modules/Core/npcdialogue/NpcDialogue.csproj" />
+    <Project Path="Modules/ruthless/Ruthless.csproj" />
+  </Folder>
   <Folder Name="/Mods/Source/">
     <Project Path="Mods/Source/BossLoot/BossLoot.csproj" />
     <Project Path="Mods/Source/DoubleExperience/DoubleExperience.csproj" />

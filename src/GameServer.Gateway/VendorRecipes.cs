@@ -68,9 +68,9 @@ sealed partial class VendorRecipes
         public int Left = placement.Item.StackSize;
     }
 
-    public Quote Evaluate(IEnumerable<InventoryItem> offered, Random? random = null, double? ruthlessRewardMultiplier = null)
+    public Quote Evaluate(IEnumerable<InventoryItem> offered, Random? random = null, double? basicSaleMultiplier = null)
     {
-        if (ruthlessRewardMultiplier is { } multiplier) return RuthlessBasicSale(offered, multiplier);
+        if (basicSaleMultiplier is { } multiplier) return BasicSale(offered, multiplier);
         var rng = random ?? Random.Shared;
         var pool = offered.OrderBy(x => x.Id).Select(i => new Ingredient(i, Type(i.Item))).ToList();
         if (pool.Select(i => i.Id).Distinct().Count() != pool.Count) throw new ArgumentException("Duplicate vendor ingredient id");
@@ -302,9 +302,9 @@ sealed partial class VendorRecipes
         return new(rewards, recipes);
     }
 
-    // Ruthless deliberately excludes the regular deterministic recipes. Basic selling remains useful, with the
+    // A league with a basic-sale multiplier deliberately excludes the regular deterministic recipes. Basic selling remains useful, with the
     // LocalExile configurable reward multiplier applied after combining like shards, before full-stack normalization.
-    Quote RuthlessBasicSale(IEnumerable<InventoryItem> offered, double multiplier)
+    Quote BasicSale(IEnumerable<InventoryItem> offered, double multiplier)
     {
         var money = new Dictionary<string, long>();
         void Add(string name, long count) => money[name] = checked(money.GetValueOrDefault(name) + count);
@@ -322,7 +322,7 @@ sealed partial class VendorRecipes
                 {
                     "Portal Scroll" => 1, "Armourer's Scrap" => 2,
                     "Blacksmith's Whetstone" or "Orb of Transmutation" or "Orb of Alteration" => 4,
-                    _ => throw new NotSupportedException("This currency's Ruthless vendor recipe is not implemented. Nothing has been sold."),
+                    _ => throw new NotSupportedException("This currency's basic sale is not implemented. Nothing has been sold."),
                 };
                 Add("Scroll of Wisdom", (long)wisdoms * count);
             }
@@ -361,7 +361,7 @@ sealed partial class VendorRecipes
                 rewards.Add(ItemCatalog.Create(type) with { StackSize = (ushort)amount });
                 left -= amount;
             }
-        return new(rewards, placements.Length == 0 ? [] : ["Ruthless basic sale"]);
+        return new(rewards, placements.Length == 0 ? [] : ["basic sale"]);
     }
 
     static bool Empty(Item i) => i.Sockets.All(s => s.Gem is null);

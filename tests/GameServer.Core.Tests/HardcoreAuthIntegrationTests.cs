@@ -19,7 +19,7 @@ public class HardcoreAuthIntegrationTests
         var first = Assert.IsType<InstanceInfo>(Assert.Single(fixture.Session.Handle(new U8U32(0, 0))));
         var resolved = fixture.Directory.Handle(new() { Op = "resolve", Ticket = first.U32_38 });
         Assert.True(resolved.Ok);
-        Assert.Equal((source, true, ssf, false), (resolved.League, resolved.Hardcore, resolved.Ssf, resolved.Ruthless));
+        Assert.Equal((source, true, ssf, false), (resolved.League, resolved.Hardcore, resolved.Ssf, resolved.LeagueForm is not null));
 
         var original = fixture.Accounts.FindCharacter("DeathProbe")!;
         fixture.Store.UpdateCharacter(HardcoreDeathRules.Apply(original,
@@ -32,7 +32,7 @@ public class HardcoreAuthIntegrationTests
         Assert.NotEqual(first.U32_38, next.U32_38);
         var entered = fixture.Directory.Handle(new() { Op = "resolve", Ticket = next.U32_38 });
         Assert.True(entered.Ok);
-        Assert.Equal((destination, false, ssf, false), (entered.League, entered.Hardcore, entered.Ssf, entered.Ruthless));
+        Assert.Equal((destination, false, ssf, false), (entered.League, entered.Hardcore, entered.Ssf, entered.LeagueForm is not null));
         Assert.NotEqual(resolved.Instance, entered.Instance);
         Assert.Equal(original.Id, entered.CharacterId);
     }

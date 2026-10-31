@@ -1,0 +1,7 @@
+{
+  "id": "tattoos",
+  "version": "1.0.0",
+  "kind": "feature",
+  "depends": [],
+  "assembly": "bin/tattoos.dll"
+}

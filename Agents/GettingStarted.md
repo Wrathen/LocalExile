@@ -438,7 +438,7 @@ Environment variables, read when each server starts:
 | `Game_WALKMAPS` | unset | set by `live.ps1 -Walkmaps`: the Gateway announces each area load to the walk-map recorder and runs capture tours (`/tour`); unset, it records nothing |
 | `Game_SEED` | unset | a number = that seed for every new non-town, non-hideout instance (generation traces of one seed with `live.ps1 -Walkmaps`; overrides `Game_RANDOM_SEEDS`) |
 | `Game_LEAGUE` | `standard` | `hardcore` shows the hardcore death screen (a single Exit button) |
-| `Game_LEAGUES` | `Standard,Allflame` | base leagues; each offers its Hardcore/SSF/Ruthless combinations |
+| `Game_LEAGUES_FOLDER` | `Leagues` | where the leagues are: one folder per league |
 | `Game_RUTHLESS_RULES` | `config/ruthless.json` | Ruthless tuning file; valid edits apply during play |
 | `Game_START_WEAPON` | unset | `ground` = a new character's class weapon waits on the ground near the spawn instead of being worn |
 | `Game_FLASK_BUFFS` | unset | `0` = flasks recover without putting their flask_effect buff on the player |

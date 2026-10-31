@@ -19,20 +19,7 @@ partial class Program
             // A terminal Hardcore owner may only leave for character selection.
             if (HardcoreProgressBlocked(conn) && id != 0x0153) continue;
             // A mod may take the message (Program.Mods.cs): then the Gateway's own handler below does not run.
-            if (ServerMods.WantsPacket(id) && await ServerMods.Packet(PlayerOf(conn), id, bytes)) continue;
-            if (id == InstanceDelve.RouteId)
-            {
-                var route = InstanceDelve.ReadRoute(bytes);
-                Console.WriteLine($"[gateway] {remote} Delve route requested: {string.Join(" -> ", route)}; route execution is not implemented");
-                if (conn.PlayerSent && conn.Layout.Hash is StashCatalog.DelveHub or InstanceDelve.MineArea)
-                    await conn.Commands!.Reply("This mine route is not available yet.");
-                continue;
-            }
-            if (id is InstanceDelve.UpgradesRequestId or InstanceDelve.UpgradeId or InstanceDelve.PurchaseId)
-            {
-                await UseDelveEquipment(remote, stream, ciphers, conn, id, bytes);
-                continue;
-            }
+            if (ServerHooks.WantsPacket(id) && await ServerHooks.Packet(PlayerOf(conn), id, bytes)) continue;
             // Immediate transfer ingress cuts the old epoch off instead of replaying overdue old-world damage.
             // Movement/combat handlers also advance atomically inside their mutation boundaries.
             bool transferIngress = id is InstanceTransfer.ChooseInstanceId or InstanceTransfer.LeaveAreaAckId
@@ -200,16 +187,6 @@ partial class Program
             }
             else if (id == InstancePause.RequestId)
                 await SetPaused(remote, stream, ciphers, conn, InstancePause.ReadRequest(bytes));
-            else if (id == InstanceMicrotransactions.RequestId)
-            {
-                var asked = InstanceMicrotransactions.ReadRequest(bytes);
-                Console.WriteLine($"[gateway] {remote} <= 0x01f2 microtransaction lists asked: {asked}");
-                await AnswerMtxRequest(remote, stream, ciphers, asked);
-            }
-            else if (id == InstanceMicrotransactions.SlotId)
-                await PickCosmetic(remote, stream, ciphers, conn, InstanceMicrotransactions.ReadSlot(bytes));
-            else if (id == InstanceMicrotransactions.SkillPickId)
-                await PickSkillCosmetic(remote, stream, ciphers, conn, InstanceMicrotransactions.ReadSkillPick(bytes));
             else if (id == InstanceProtocol.UseInstantSkillAtLocationId)
             {
                 var (x, y, skill) = InstanceProtocol.ReadUseInstantSkillAtLocation(bytes);
@@ -361,8 +338,6 @@ partial class Program
                 await UseFlask(remote, stream, ciphers, conn, InstanceItems.ReadUseFlask(bytes));
             else if (id == InstanceItems.UseItemOnId)
                 await UseItemOn(remote, stream, ciphers, conn, InstanceItems.ReadUseItemOn(bytes), Convert.ToHexString(bytes));
-            else if (id == InstanceItems.UseItemOnPassiveId)
-                await UseTattooOnPassive(remote, stream, ciphers, conn, InstanceItems.ReadUseItemOnPassive(bytes), Convert.ToHexString(bytes));
             else if (id == InstanceItems.UseItemTypeOnId)
             {
                 // Shift held: the currency stays on the cursor and is named by type; use a stack of it from the inventories,
@@ -404,56 +379,6 @@ partial class Program
                 _ = Resurrect(remote, stream, ciphers, conn, InstanceProtocol.ReadResurrectInTown(bytes));
             else if (id == InstanceNpcs.DialogueClosedId)
                 await CloseNpcDialogue(remote, stream, ciphers, conn);
-            else if (id == InstanceNpcs.TradeOfferId && conn.Trade is { } offerTrade)
-            {
-                var offer = InstanceNpcs.ReadTradeOffer(bytes);
-                await PlayerTradeOffer(remote, conn, offerTrade, offer.InventoryId, offer.ItemId, offer.X, offer.Y);
-            }
-            else if (id is InstanceNpcs.TradeTakeBackId or InstanceNpcs.TradeMoveAllId && conn.Trade is { } moveTrade)
-            {
-                var (item, inventory) = InstanceNpcs.ReadTradeMove(bytes);
-                await PlayerTradeOffer(remote, conn, moveTrade, inventory, item);
-            }
-            else if (id == InstanceNpcs.TradeAcceptId && conn.Trade is { } acceptTrade)
-                await PlayerTradeAccept(remote, conn, acceptTrade, InstanceNpcs.ReadTradeAccept(bytes));
-            else if (id == InstanceNpcs.TradeUnacceptId && conn.Trade is { } unacceptTrade)
-                await PlayerTradeUnaccept(conn, unacceptTrade);
-            else if (id == InstanceNpcs.TradeAnswerId && conn.Trade is not null)
-                await CancelPlayerTrade(conn, "cancelled");
-            else if (id == InstanceNpcs.TradeAnswerId && conn.TradeRequestTo != 0)
-                await CancelTradeRequest(conn);
-            else if (id == InstanceNpcs.TradeAnswerId && InstanceNpcs.ReadTradeAnswer(bytes).Other != 0 && conn.Sale is null)
-                await DeclineTradeRequest(conn, InstanceNpcs.ReadTradeAnswer(bytes).Other);
-            else if (id == InstanceSocial.TradeRequestAcceptId)
-                await AcceptTradeRequest(remote, conn, InstanceSocial.ReadTradeRequestAccept(bytes));
-            else if (id == InstanceNpcs.TradeOfferId)
-            {
-                var offer = InstanceNpcs.ReadTradeOffer(bytes);
-                // Ctrl + click on an inventory item sends x = y = 0xff (0x14030e3e0 → 0x142166660): any free offer cell.
-                if (conn.Sale is { } sale && offer.X == 0xff && offer.Y == 0xff) await OfferFromInventory(remote, stream, ciphers, conn, sale, offer.InventoryId, offer.ItemId);
-                else if (conn.Sale is { } open) await OfferForSale(remote, stream, ciphers, conn, open, offer.InventoryId, offer.ItemId, offer.X, offer.Y);
-                else Console.WriteLine($"[gateway] {remote} <= 0x00b2 trade offer {offer}: no sale open");
-            }
-            else if (id is InstanceNpcs.TradeTakeBackId or InstanceNpcs.TradeMoveAllId)
-            {
-                var (item, inventory) = InstanceNpcs.ReadTradeMove(bytes);
-                Console.WriteLine($"[gateway] {remote} <= 0x{id:x4} trade move item {item} (inventory {inventory})");
-                if (conn.Sale is not { } sale) Console.WriteLine($"[gateway] {remote} trade move: no sale open");
-                else if (ItemsOf(conn).Offered().Any(i => i.Id == item)) await TakeFromSale(remote, stream, ciphers, conn, sale, item);
-                else await OfferFromInventory(remote, stream, ciphers, conn, sale, inventory, item);
-            }
-            else if (id == InstanceNpcs.TradeAcceptId)
-            {
-                uint revision = InstanceNpcs.ReadTradeAccept(bytes);
-                Console.WriteLine($"[gateway] {remote} <= 0x00b6 trade accept (their offer revision {revision}, ours {conn.Sale?.TheirsRevision})");
-                await CloseSale(remote, stream, ciphers, conn, accepted: conn.Sale is { } s && s.TheirsRevision == revision);
-            }
-            else if (id == InstanceNpcs.TradeUnacceptId)
-                Console.WriteLine($"[gateway] {remote} <= 0x00b7 trade un-accept: {Convert.ToHexString(bytes)}");
-            else if (id == InstanceNpcs.TradeAnswerId)
-                await AnswerSale(remote, stream, ciphers, conn, InstanceNpcs.ReadTradeAnswer(bytes));
-            else if (id == InstanceNpcs.BuyId)
-                await BuyFromShop(remote, stream, ciphers, conn, InstanceNpcs.ReadBuy(bytes));
             else if (id == InstanceStash.RequestTabId)
             {
                 var (tab, kind) = InstanceStash.ReadRequestTab(bytes);
@@ -532,8 +457,6 @@ partial class Program
                 await MoveToAffinityTab(remote, stream, ciphers, conn, InstanceStash.ReadMoveToAffinityTab(bytes), Convert.ToHexString(bytes));
             else if (id == InstanceStash.SetAffinitiesId)
                 await SetTabAffinities(remote, stream, ciphers, conn, InstanceStash.ReadSetAffinities(bytes));
-            else if (id == InstanceNpcs.CtrlBuyId)
-                await CtrlBuyFromShop(remote, stream, ciphers, conn, InstanceNpcs.ReadCtrlBuy(bytes));
             else if (id == InstanceStash.TakeFromTabId)
             {
                 var move = InstanceStash.ReadTakeFromTab(bytes);
@@ -541,34 +464,12 @@ partial class Program
                     $"({move.Kind:x2} {move.TokenLo:x2} {move.TokenHi:x2} {move.Bulk:x2}, {(move.Bulk != 0 ? "bulk" : "one stack")})");
                 await TakeFromStash(remote, stream, ciphers, conn, move.Tab, move.ItemId, all: move.Bulk != 0);
             }
-            else if (id == InstanceMapDevice.ActivateId)
-                await ActivateMapDevice(remote, stream, ciphers, conn, InstanceMapDevice.ReadActivate(bytes));
-            else if (id == InstanceMapDevice.SelectMapId)
-                await SelectAtlasMap(remote, stream, ciphers, conn, InstanceMapDevice.ReadSelectMap(bytes));
-            else if (id == InstanceEntities.AtlasAllocateId)
-            {
-                var (preset, node) = InstanceEntities.ReadAtlasAllocate(bytes);
-                await ChangeAtlasPassive(remote, stream, ciphers, conn, preset, node, allocate: true);
-            }
-            else if (id == InstanceEntities.AtlasRefundId)
-            {
-                var (preset, node, _) = InstanceEntities.ReadAtlasRefund(bytes);
-                await ChangeAtlasPassive(remote, stream, ciphers, conn, preset, node, allocate: false);
-            }
             else if (id == InstanceStash.MoveTabId)
                 Console.WriteLine($"[gateway] {remote} <= 0x00d1 stash tab into a folder (not handled): {Convert.ToHexString(bytes)}");
             else if (id == InstanceNpcs.OptionId)
                 await ChooseNpcOption(remote, stream, ciphers, conn, InstanceNpcs.ReadOption(bytes));
-            else if (id == InstanceHideoutEditing.MoveId)
-                await MoveHideoutObject(remote, stream, ciphers, conn, InstanceHideoutEditing.ReadMove(bytes));
             else if (id == InstanceHideouts.SelectId)
                 await SelectHideout(remote, stream, ciphers, conn, InstanceHideouts.ReadSelect(bytes));
-            else if (id == InstanceBench.MoveId)
-                await MoveToBench(remote, stream, ciphers, conn, InstanceBench.ReadMove(bytes));
-            else if (id == InstanceBench.CraftId)
-                await CraftBench(remote, stream, ciphers, conn, InstanceBench.ReadCraft(bytes));
-            else if (id == InstanceHarvest.CraftId)
-                await CraftHarvest(remote, stream, ciphers, conn, InstanceHarvest.ReadCraft(bytes));
             else if (id == InstanceChat.ChatId)
             {
                 var chat = InstanceChat.ReadChat(bytes);
@@ -594,14 +495,6 @@ partial class Program
             }
             else if (id == InstanceWaypoints.TravelId)
                 _ = TravelByWaypoint(remote, stream, ciphers, conn, InstanceWaypoints.ReadTravel(bytes));
-            else if (id == InstanceSocial.TradeRequestId)
-                await RequestTrade(remote, stream, ciphers, conn, InstanceSocial.ReadTradeRequest(bytes));
-            else if (id == InstanceSocial.PartyInviteId)
-                await InviteToParty(remote, conn, InstanceSocial.ReadPartyInvite(bytes));
-            else if (id == InstanceSocial.PartyAcceptId)
-                await AcceptParty(remote, conn, InstanceSocial.ReadPartyAccept(bytes));
-            else if (id == InstanceSocial.PartyLeaveId)
-                await LeaveParty(remote, conn, InstanceSocial.ReadPartyAccept(bytes));
             else if (id == InstanceSocial.FriendAddId)
                 Console.WriteLine($"[gateway] {remote} <= 0x0080 add friend \"{InstanceSocial.ReadFriendAdd(bytes).Name}\" (not handled yet)");
             else if (id == InstanceProtocol.AreaGeneratedId)
@@ -660,30 +553,18 @@ partial class Program
                     // two-handed weapon is held, the update does (live 2026-10-22: it was held one-handed after every load).
                     await SendModel(remote, stream, ciphers, conn, Looks(conn, ItemsOf(conn)), "entering");
                     await PopulateArea(remote, stream, ciphers, conn);
-                    await SpawnPets(remote, stream, ciphers, conn);
                     await SendGroundItems(remote, stream, ciphers, conn);
                     await PlaceStartWeapon(remote, stream, ciphers, conn);
                     await SpawnTownNpcs(remote, stream, ciphers, conn);
                     await SpawnTownStash(remote, stream, ciphers, conn);
-                    await SpawnDelveCrawler(remote, stream, ciphers, conn);
-                    await SpawnDelveGenerator(remote, stream, ciphers, conn);
-                    await SpawnQuestRoomObjects(remote, stream, ciphers, conn);
-                    await SpawnOpeningTutorial(remote, stream, ciphers, conn);
-                    await SpawnGlyphQuest(remote, stream, ciphers, conn);
-                    await SpawnHideoutDoodads(remote, stream, ciphers, conn);
                     // All stationary objects must exist before validating the arrival cell.
                     await PushOutOfCollision(remote, stream, ciphers, conn);
-                    await SpawnMapReturnPortal(remote, stream, ciphers, conn);
-                    await SpawnTownPortals(remote, stream, ciphers, conn);
                     await conn.Commands!.Reply($"Area generated at Seed: {conn.Seed}");
                     // An area the Gateway does not generate itself (ServerLevels) runs on the client's layout alone.
                     if (!ServerLevels.IsSupported(conn.Layout.Id) && !CaptureTour.Active(CharacterName(conn)))
                         await conn.Commands!.Reply(ServerLevels.UnsupportedMessage);
-                    await ServerMods.AreaGenerated(PlayerOf(conn));
+                    await ServerHooks.AreaGenerated(PlayerOf(conn));
                     _ = RunMonsterRegeneration(remote, stream, ciphers, conn);
-                    _ = RunUniqueBeltEffects(remote, stream, ciphers, conn);
-                    await SyncQuestItems(remote, stream, ciphers, conn, removeItems: true);   // a1q5: the Medicine Chest's flag
-                    _ = RunMercyMission(remote, stream, ciphers, conn);
                     _ = RunServerFrames(remote, stream, ciphers, conn);
                     _ = RunMonsterAi(remote, stream, ciphers, conn);
                     _ = ContinueTour(remote, stream, ciphers, conn);
@@ -699,18 +580,13 @@ partial class Program
         }
         // a1q5: after a read that moved items, the Medicine Chest's flag (and its removal once Nessa has one), here on the
         // message path so the inventory revisions stay in order.
-        if (conn.PlayerSent && messages.Any(m => MercyMission.MovesItems(m.Id))) await SyncQuestItems(remote, stream, ciphers, conn, removeItems: true);
+        await GameEvents.RunMessagesHandled(conn, [.. messages.Select(m => m.Id)]);
         if (unknown.Length > 0)
         {
             ushort uid = unknown.Length > 1 ? (ushort)(unknown[0] << 8 | unknown[1]) : unknown[0];
             Console.WriteLine($"[gateway] {remote} <= unframed 0x{uid:x4} ({unknown.Length} bytes): {Convert.ToHexString(unknown.AsSpan(0, Math.Min(unknown.Length, 256)))}");
-            // C→S 0x23f: the Delve chart (opened by Niko) asks for its data; S→C 0x240 answers (an empty chart for now).
-            if (uid == InstanceDelve.ChartRequestId && unknown.Length == 2)
-            {
-                var (a, b, cells) = conn.DelveChartProbe;
-                await Send(remote, stream, ciphers, InstanceDelve.Chart(a, b, cells),
-                    $"0x0240 Delve chart: {a}, {b}, {cells.Count} cell(s) {string.Join(" ", cells)}");
-            }
+            // Unframed messages have the hooks too.
+            if (ServerHooks.WantsPacket(uid)) await ServerHooks.Packet(PlayerOf(conn), uid, unknown);
             // The client's answer to 0x2b2 (0x142148690): it is ready to leave, so move it now.
             if (uid == InstanceTransfer.LeaveAreaAckId && conn.PendingTransfer is { } t) await Transfer(remote, stream, ciphers, conn, t);
         }

@@ -110,8 +110,8 @@ static async Task Serve(LoginServerKeys keys)
         CharacterHome.SelectedHideout(progress, character) is { } area && hideoutAreas.TryGetValue(area, out ushort hash) ? hash : null);
     _ = directory.ServeControlAsync(InstanceControl.Port);
     Console.WriteLine($"[auth] login server on tcp/{port}");
-    // Game_LEAGUES: comma-separated base leagues (default Standard, Allflame), each with its Hardcore / SSF / Ruthless variants.
-    Console.WriteLine($"[auth] leagues: {string.Join(", ", LeagueCatalog.FromEnvironment().All.Select(l => l.Name))}");
+    // Game_LEAGUES: comma-separated base leagues (default Standard and those the league modules declare), each with its variants.
+    Console.WriteLine($"[auth] leagues: {string.Join(", ", LeagueCatalog.Startup.All.Select(l => l.Name))}");
     while (true)
     {
         var tcp = await listener.AcceptTcpClientAsync();
@@ -147,7 +147,7 @@ static async Task HandleConnection(TcpClient tcp, LoginServerKeys keys, AccountS
             // Anything the client sent after its 0x0002 is already ciphertext.
             var incoming = new LoginMessageStream(LoginDirection.ClientToServer);
             InstanceDirectory.LoginLink? link = null;
-            var session = new LoginServerSession(accounts) { Keyring = keyring, Leagues = LeagueCatalog.FromEnvironment(), CharacterDeleted = SetSaveAside, Assign = s => directory.AssignStart(s, link!) };
+            var session = new LoginServerSession(accounts) { Keyring = keyring, Leagues = LeagueCatalog.Startup, CharacterDeleted = SetSaveAside, Assign = s => directory.AssignStart(s, link!) };
             link = new InstanceDirectory.LoginLink(stream, ciphers, session, peer);
             byte[] rest = buf[used..have];
             try

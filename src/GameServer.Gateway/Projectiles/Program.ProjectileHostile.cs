@@ -17,7 +17,7 @@ partial class Program
     // and a 3-cell spread only), so this is a development default like the Kinetic Blast fallbacks, in cells.
     internal const double MonsterMortarRadiusCells = 10;
 
-    static double MonsterMortarRadius() =>
+    internal static double MonsterMortarRadius() =>
         double.TryParse(Environment.GetEnvironmentVariable("Game_MONSTER_MORTAR_RADIUS"), out double radius) && radius > 0
             ? radius : MonsterMortarRadiusCells;
 
@@ -98,7 +98,7 @@ partial class Program
 
     // The release at the attack's contact: the shot leaves toward where the player stands now and the flight then owns
     // contact and damage (HostileHit). The AI action must still be current when the runtime releases it.
-    static void LaunchMonsterProjectile(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static void LaunchMonsterProjectile(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         uint id, SpawnedMonster m, MonsterAttack a, SkillCatalog.MonsterProjectileInfo projectile, int action)
     {
         var session = ProjectilesFor(remote, stream, ciphers, conn);
@@ -110,7 +110,7 @@ partial class Program
     // Called under the XP -> Monsters lock by the runtime. Only the player takes a monster's projectile; a friendly monster in
     // its way is passed through. The monster's damage pipeline (CommitMonsterHitLocked) owns evasion, block, armour,
     // ailments, recovery and the hit packet; the presentation follows through the session's ordered outbox.
-    static ProjectileHitResult HostileHit(ProjectileSession session, ProjectileDamage contact, HostileProjectileOffense shot)
+    internal static ProjectileHitResult HostileHit(ProjectileSession session, ProjectileDamage contact, HostileProjectileOffense shot)
     {
         var conn = session.Conn;
         if (contact.Target.Id != PlayerId || conn.PlayerLife == 0 || InGracePeriod(conn)) return ProjectileHitResult.Miss;

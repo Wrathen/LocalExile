@@ -1,0 +1,15 @@
+{
+  "name": "SSF Hardcore Ruthless",
+  "parent": "SSF Ruthless",
+  "base": "Standard",
+  "hardcore": true,
+  "ssf": true,
+  "form": "ruthless",
+  "entryOf": "SSF Hardcore",
+  "entryKind": "form",
+  "description": "Ruthless: extreme item scarcity. Solo Self-Found. A character killed moves to SSF Ruthless.",
+  "addModules": [
+    "ruthless"
+  ],
+  "dataSet": "HardMode"
+}

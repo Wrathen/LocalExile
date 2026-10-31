@@ -6,20 +6,20 @@ using Progression = GameServer.Core.World.Progression;
 
 partial class Program
 {
-    sealed class CharacterLevelUpdates
+    internal sealed class CharacterLevelUpdates
     {
         public readonly Lock Gate = new();
         public readonly SemaphoreSlim Auth = new(1, 1);
         public long Revision;
     }
 
-    static readonly ConcurrentDictionary<string, CharacterLevelUpdates> LevelUpdates = new(StringComparer.OrdinalIgnoreCase);
-    static CharacterLevelUpdates LevelUpdatesFor(ClientState conn) => LevelUpdates.GetOrAdd(CharacterName(conn), _ => new());
+    internal static readonly ConcurrentDictionary<string, CharacterLevelUpdates> LevelUpdates = new(StringComparer.OrdinalIgnoreCase);
+    internal static CharacterLevelUpdates LevelUpdatesFor(ClientState conn) => LevelUpdates.GetOrAdd(CharacterName(conn), _ => new());
 
     internal sealed record ExperienceChange(long Revision, uint Before, uint After, bool LevelChanged, bool Reset = false);
 
     // Call while holding the connection lock; an accepted death must not gain XP or publish a later level-up heal.
-    static bool HardcoreProgressBlocked(ClientState conn) =>
+    internal static bool HardcoreProgressBlocked(ClientState conn) =>
         conn.Hardcore && (conn.PlayerLife == 0 || conn.HardcoreDeathRecorded);
 
     // All production gains/resets serialize the shared XP ledger before publishing a connection copy.
@@ -31,11 +31,11 @@ partial class Program
         lock (conn.Monsters)
         {
             if (HardcoreProgressBlocked(conn)) return null;
-            var ruthless = conn.Ruthless ? RuthlessSettings.Current : null;
+            var rules = LeagueFor(conn).Rules;
             var (before, after) = CharacterSaves.AddExperience(CharacterName(conn), conn.Experience,
                 // An older area may have stale pools. Scale against the shared ledger's current level, not that copy.
-                xp => Progression.AddExperience(xp, ruthless is null ? gain : RuthlessRules.Scale(gain,
-                    ruthless.ExperienceMultiplier(Progression.LevelFor(xp, CharacterStats.LevelStarts))), CharacterStats.LevelStarts));
+                xp => Progression.AddExperience(xp, LeagueRules.Scale(gain,
+                    rules.ExperienceMultiplier(Progression.LevelFor(xp, CharacterStats.LevelStarts))), CharacterStats.LevelStarts));
             if (after == before) return null;
             bool levelChanged = Progression.LevelFor(after, CharacterStats.LevelStarts) != conn.Pools.Level;
             if (levelChanged) CharacterSaves.SaveExperience(CharacterName(conn));
@@ -44,7 +44,7 @@ partial class Program
         }
     }
 
-    static ExperienceChange RecordExperienceReset(ClientState conn, int level)
+    internal static ExperienceChange RecordExperienceReset(ClientState conn, int level)
     {
         var updates = LevelUpdatesFor(conn);
         lock (updates.Gate)
@@ -62,7 +62,7 @@ partial class Program
         }
     }
 
-    static uint CurrentExperience(ClientState conn) =>
+    internal static uint CurrentExperience(ClientState conn) =>
         CharacterSaves.Load(CharacterName(conn))?.Experience ?? conn.Experience;
 
     internal static async Task<bool> PublishExperienceChange(string remote, NetworkStream stream, ConnectionCiphers ciphers,

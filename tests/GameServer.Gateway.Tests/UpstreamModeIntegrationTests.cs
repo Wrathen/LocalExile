@@ -23,7 +23,7 @@ public class UpstreamModeIntegrationTests
         var conn = new ClientState(new(ushort.MaxValue, "ModeIntegration", 128, 128, 32, 32, null, []), 0, 1)
         {
             Character = name, CharacterId = character.Id, ClassRow = 1, League = source,
-            Hardcore = true, Ssf = ssf, Ruthless = ruthless, PlayerLife = 1, PlayerMana = 100,
+            Hardcore = true, Ssf = ssf, LeagueForm = ruthless ? "ruthless" : null, PlayerLife = 1, PlayerMana = 100,
         };
         conn.Pools = Program.PoolsFor(conn, 1);
         conn.PlayerLife = 1;
@@ -53,5 +53,5 @@ public class UpstreamModeIntegrationTests
 
     static ClientState Connection(string character, bool ruthless) =>
         new(new(ushort.MaxValue, "ModeIntegration", 128, 128, 32, 32, null, []), 0, 1)
-        { Character = character, ClassRow = 1, Ruthless = ruthless, PlayerLife = 100, PlayerMana = 100 };
+        { Character = character, ClassRow = 1, LeagueForm = ruthless ? "ruthless" : null, PlayerLife = 100, PlayerMana = 100 };
 }

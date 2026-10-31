@@ -18,7 +18,7 @@ public sealed record Character(
     string League, string AreaId, DateTimeOffset CreatedUtc, DateTimeOffset LastPlayedUtc, string? LastTown = null,
     ushort Portrait = 0, HardcoreDeathRecord? HardcoreDeath = null);
 
-/// <summary>A committed Hardcore death. The source league is retained after migration; Ruthless deaths are terminal.
+/// <summary>A committed Hardcore death. The source league is retained after migration; a league form can make deaths terminal.
 /// Stored with the account's character record, separately from mutable inventory/progress saves.</summary>
 public sealed record HardcoreDeathRecord(string SourceLeague, DateTimeOffset AtUtc, bool PermanentlyDead);
 

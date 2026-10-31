@@ -6,12 +6,12 @@ using GameServer.Core.Diagnostics;
 partial class Program
 {
     // The smoke cloud's and consecrated ground's art (FlaskGrounds.LoadArt), read once.
-    static readonly Lazy<Dictionary<FlaskGrounds.Kind, (string Ao, int ArtRadius)>> FlaskGroundArt = new(() => FlaskGrounds.LoadArt("data"));
+    internal static readonly Lazy<Dictionary<FlaskGrounds.Kind, (string Ao, int ArtRadius)>> FlaskGroundArt = new(() => FlaskGrounds.LoadArt("data"));
 
     // A utility flask's use: what its implicit makes where the player stands (FlaskGrounds), for the flask's duration: a smoke
     // cloud or consecrated ground (an effect object with the ground's art), or a taunt (the taunted buff on the hostile
     // monsters within its radius, for 3 s).
-    static async Task MakeFlaskGrounds(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+    internal static async Task MakeFlaskGrounds(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
         string flask, IReadOnlyDictionary<string, int> local, double seconds)
     {
         double now = conn.Clock.Elapsed.TotalSeconds;
@@ -53,7 +53,7 @@ partial class Program
     // Every 100 ms of game time while a flask ground lasts: monsters standing in a smoke cloud are blinded (the blinded
     // buff, FlaskGrounds.Accuracy / Evasion), the player on consecrated ground gets its regeneration (FlaskGrounds.PlayerStats,
     // the ground_consecration buff, the stats again), and grounds whose time is up go (their art removed, taunts taken off).
-    static async Task RunFlaskGrounds(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    internal static async Task RunFlaskGrounds(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
     {
         var state = conn.FlaskGrounds;
         try
