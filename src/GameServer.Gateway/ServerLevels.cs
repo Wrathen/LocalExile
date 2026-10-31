@@ -38,16 +38,16 @@ static class ServerLevels
     static HashSet<string>? _supported;
     static TerrainCache? _files;
     static GameFileSystem? _fs;
-    static readonly ConcurrentDictionary<(string Area, uint Seed), Level?> Generated = new();
+    static readonly ConcurrentDictionary<(string Area, uint Seed, int Level), Level?> Generated = new();
     // The order they were generated in: with random seeds every new instance is a new (area, seed), so only the last
     // Kept stay (a level is several MB); an older one is generated again when asked for.
-    static readonly Queue<(string Area, uint Seed)> Order = new();
+    static readonly Queue<(string Area, uint Seed, int Level)> Order = new();
     const int Kept = 24;
     // Why the last generations that failed did (the exception in full), for the capture tour's records.
-    static readonly ConcurrentDictionary<(string Area, uint Seed), string> Errors = new();
+    static readonly ConcurrentDictionary<(string Area, uint Seed, int Level), string> Errors = new();
 
     /// <summary>The exception of a failed generation of (area, seed), while it is among the last ones asked for.</summary>
-    public static string? Error(string areaId, uint seed) => Errors.GetValueOrDefault((areaId, seed));
+    public static string? Error(string areaId, uint seed) => Errors.GetValueOrDefault((areaId, seed, 0));
 
     /// <summary>Whether the Gateway generates this area itself (<see cref="BaselineFile"/>).</summary>
     public static bool IsSupported(string areaId)
@@ -66,22 +66,23 @@ static class ServerLevels
     /// <summary>The generated layout of (area, seed), or null when the area is not supported or generation failed
     /// (the Gateway then falls back to the capture). Generated once per (area, seed) and kept while among the last
     /// <see cref="Kept"/>.</summary>
-    public static Level? For(string areaId, uint seed)
+    public static Level? For(string areaId, uint seed, int? level = null)
     {
         if (!IsSupported(areaId)) return null;
-        if (Generated.TryGetValue((areaId, seed), out var known)) return known;
+        int keyLevel = level ?? 0;
+        if (Generated.TryGetValue((areaId, seed, keyLevel), out var known)) return known;
         lock (Gate)
         {
-            if (Generated.TryGetValue((areaId, seed), out known)) return known;
-            var level = Generated[(areaId, seed)] = Generate(areaId, seed);
-            Order.Enqueue((areaId, seed));
+            if (Generated.TryGetValue((areaId, seed, keyLevel), out known)) return known;
+            var generated = Generated[(areaId, seed, keyLevel)] = Generate(areaId, seed, level);
+            Order.Enqueue((areaId, seed, keyLevel));
             while (Order.Count > Kept)
             {
                 var old = Order.Dequeue();
                 Generated.TryRemove(old, out _);
                 Errors.TryRemove(old, out _);
             }
-            return level;
+            return generated;
         }
     }
 
@@ -119,13 +120,13 @@ static class ServerLevels
     public static Level? InPlaceOf(string folder, string areaId, uint seed) =>
         Path.GetFullPath(folder) == Path.GetFullPath("data/walkability") ? For(areaId, seed) : null;
 
-    static Level? Generate(string areaId, uint seed)
+    static Level? Generate(string areaId, uint seed, int? level = null)
     {
         var clock = Stopwatch.StartNew();
         try
         {
             var files = Files();
-            var area = AreaInfo.Load(Read, areaId, AreaLevel(areaId));
+            var area = AreaInfo.Load(Read, areaId, level ?? AreaLevel(areaId));
             var result = LevelGenerator.Generate(files, area, seed);
             var walk = Walkability.Build(result.Grid, t => files.Walk(t.Path));
             // The doodad stage stamps the doodads' collision into the grids (re/011 §6c).
@@ -144,7 +145,7 @@ static class ServerLevels
         catch (Exception ex)
         {
             Console.WriteLine($"[gateway] server levels: {areaId} seed {seed} not generated ({ex.GetType().Name}: {ex.Message.Split('\n')[0]})");
-            Errors[(areaId, seed)] = ex.ToString();
+            Errors[(areaId, seed, level ?? 0)] = ex.ToString();
             return null;
         }
     }

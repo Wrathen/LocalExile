@@ -1204,6 +1204,9 @@ partial class Program
             if (have < needed) await GainExperience(remote, stream, ciphers, conn, needed - have, $"quest: {m.Label} killed, level {level}");
         }
         await GainKillCharges(remote, stream, ciphers, conn, m.Rarity, $"{m.Rarity} {m.Label} 0x{id:x} killed");
+        if (m.Rarity == MonsterRarity.Unique
+            && MapDevice.OpenOf(CharacterName(conn)) is { } openMap && openMap.Area.Hash16 == conn.Layout.Hash)
+            await CompleteAtlasMap(remote, stream, ciphers, conn);
         await DropLoot(remote, stream, ciphers, conn, m, at);
     }
 
@@ -1223,7 +1226,9 @@ partial class Program
             // A generic map drop (approximate rates): use the open map's tier in a map, tier 1 in the campaign.
             int mapTier = MapDevice.OpenOf(CharacterName(conn)) is { } openMap && openMap.Area.Hash16 == conn.Layout.Hash
                 ? openMap.Area.Tier : 0;
-            if (DropsFor(conn).Map(m.Level, m.Rarity, mapTier, Random.Shared) is { } mapDrop) drops.Add(mapDrop);
+            double mapChance = mapTier > 0
+                ? 1 + AtlasPassiveNodes.MapDropChancePercent(conn.AtlasPassives[Math.Clamp(conn.AtlasActivePreset, (byte)0, (byte)2)]) / 100.0 : 1;
+            if (DropsFor(conn).Map(m.Level, m.Rarity, mapTier, Random.Shared, mapChance) is { } mapDrop) drops.Add(mapDrop);
             // And a pile of gold (ItemDrops.Gold), picked up into the stash's gold.
             if (DropsFor(conn).Gold(m.Level, m.Rarity, Random.Shared,
                 (balance?.GoldMultiplier ?? 1) * SystemSettings.Default.GoldDropMultiplier * (modded?.Gold ?? 1)) is { } gold) drops.Add(gold);

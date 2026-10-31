@@ -1365,7 +1365,9 @@ partial class Program
             if (args.Length == 0)
             {
                 var current = atlas.Selected(CharacterName(conn));
-                await conn.Commands!.Reply($"Atlas layout: {current?.Name} ({current?.Id}); {atlas.Layouts.Count} layouts available.");
+                await conn.Commands!.Reply($"Atlas layout: {current?.Name} ({current?.Id}); {atlas.Layouts.Count} layouts available, " +
+                    $"{atlas.Unlocked(conn.AtlasCompletedLayouts).Count} unlocked; {conn.AtlasCompletedLayouts.Count} map(s) completed, " +
+                    $"{conn.AtlasPassivePoints} passive point(s).");
                 return;
             }
             string query = string.Join(' ', args);
@@ -1376,6 +1378,16 @@ partial class Program
                 CharacterSaves.SetAtlasLayout(character, layout.Id);
             }
             await conn.Commands!.Reply($"Atlas layout set to {layout.Name} ({layout.Id}, tier {layout.Tier}).");
+        })
+        .Add("atlas_complete", "/atlas_complete (dev: mark the current map layout complete and award its temporary point)", async _ =>
+        {
+            if (MapDevices.Value.Atlas?.ByHash16(conn.Layout.Hash) is null)
+            {
+                await conn.Commands!.Reply("This area is not an Atlas map layout.");
+                return;
+            }
+            await CompleteAtlasMap(remote, stream, ciphers, conn);
+            await conn.Commands!.Reply($"Atlas: {conn.AtlasCompletedLayouts.Count} completed, {conn.AtlasPassivePoints} point(s).");
         })
         .Add("atlas_tree", "/atlas_tree (dev: open the Atlas passive tree; S→C 0x7b kind 0x11)", async _ =>
         {
@@ -1394,7 +1406,7 @@ partial class Program
                 throw new ArgumentException("a number from 0 to 65535");
             conn.AtlasPassivePoints = (ushort)points;
             if (CharacterName(conn) is { } character)
-                CharacterSaves.SetAtlasPassives(character, conn.AtlasPassives, conn.AtlasPassivePoints);
+                CharacterSaves.SetAtlasPassives(character, conn.AtlasPassives, conn.AtlasPassivePoints, conn.AtlasActivePreset);
             await SendAtlasSlots(remote, stream, ciphers, conn, "/atlas_points");
             await conn.Commands!.Reply($"Atlas passive points: {points}.");
         })

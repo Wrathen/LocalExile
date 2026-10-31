@@ -22,6 +22,10 @@ sealed class AtlasPassives(string folder = "data")
 
     public Node? FindById(string id) => _nodes.Value.Values.FirstOrDefault(n => n.Id == id);
 
+    /// <summary>The allocated nodes' increased map drop chance (stat row 8891, key 8892).</summary>
+    public int MapDropChancePercent(IEnumerable<ushort> nodes) =>
+        nodes.Sum(n => Find(n)?.Stats.Where(s => s.Key == 8892).Sum(s => s.Value) ?? 0);
+
     static Dictionary<ushort, Node> LoadNodes(string folder)
     {
         var nodes = new Dictionary<ushort, Node>();

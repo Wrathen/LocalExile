@@ -7,7 +7,8 @@ using System.Text.Json;
 /// </summary>
 sealed class AtlasCatalog(ItemCatalog catalog, string folder = "data")
 {
-    public sealed record Layout(string Id, ushort Hash16, string Name, int Tier, bool Starting);
+    public sealed record Layout(string Id, ushort Hash16, string Name, int Tier, bool Starting,
+        IReadOnlyList<ushort> Connections);
 
     readonly Lazy<IReadOnlyList<Layout>> _layouts = new(() => LoadLayouts(folder));
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, Layout> _selected = new(StringComparer.OrdinalIgnoreCase);
@@ -24,6 +25,19 @@ sealed class AtlasCatalog(ItemCatalog catalog, string folder = "data")
 
     public Layout? ByHash16(ushort hash16) => Layouts.FirstOrDefault(l => l.Hash16 == hash16);
 
+    /// <summary>The layouts a character can enter: the starting nodes and the nodes connected to a completed layout.
+    /// The client's Atlas progress message is not implemented yet, so this is the server's progress model.</summary>
+    public IReadOnlySet<ushort> Unlocked(IReadOnlySet<string> completed)
+    {
+        var unlocked = Layouts.Where(l => l.Starting).Select(l => l.Hash16).ToHashSet();
+        foreach (string id in completed)
+            if (Find(id) is { } done)
+                unlocked.UnionWith(done.Connections);
+        return unlocked;
+    }
+
+    public bool IsUnlocked(Layout layout, IReadOnlySet<string> completed) => Unlocked(completed).Contains(layout.Hash16);
+
     public Layout? Find(string idOrName) => Layouts.FirstOrDefault(l =>
         l.Id.Equals(idOrName, StringComparison.OrdinalIgnoreCase) || l.Name.Equals(idOrName, StringComparison.OrdinalIgnoreCase));
 
@@ -34,24 +48,32 @@ sealed class AtlasCatalog(ItemCatalog catalog, string folder = "data")
 
     static IReadOnlyList<Layout> LoadLayouts(string folder)
     {
-        string nodes = Path.Combine(folder, "tables", "AtlasNode.json"), areas = Path.Combine(folder, "tables", "WorldAreas.json");
-        if (!File.Exists(nodes) || !File.Exists(areas)) return [];
-        using var n = JsonDocument.Parse(File.ReadAllBytes(nodes));
+        string nodesPath = Path.Combine(folder, "tables", "AtlasNode.json"), areas = Path.Combine(folder, "tables", "WorldAreas.json");
+        if (!File.Exists(nodesPath) || !File.Exists(areas)) return [];
+        using var n = JsonDocument.Parse(File.ReadAllBytes(nodesPath));
         using var a = JsonDocument.Parse(File.ReadAllBytes(areas));
-        var result = new List<Layout>();
-        foreach (var row in n.RootElement.EnumerateArray())
+        var nodes = n.RootElement.EnumerateArray().ToArray();
+        var byRow = new Dictionary<int, (ushort Hash16, IReadOnlyList<int> Connections)>();
+        var result = new List<(int Row, Layout Layout)>();
+        for (int rowIndex = 0; rowIndex < nodes.Length; rowIndex++)
         {
+            var row = nodes[rowIndex];
             if (!row.GetProperty("IsNormalMap").GetBoolean() || row.GetProperty("NotOnAtlas").GetBoolean() ||
                 row.GetProperty("Area1") is not { ValueKind: JsonValueKind.Number } area) continue;
             int index = area.GetInt32();
             if (index < 0 || index >= a.RootElement.GetArrayLength()) continue;
             var wa = a.RootElement[index];
             if (wa.GetProperty("HASH16") is not { ValueKind: JsonValueKind.Number } hash) continue;
-            result.Add(new(row.GetProperty("Id").GetString() ?? "", (ushort)hash.GetInt32(),
+            var connections = row.GetProperty("Connections").EnumerateArray().Select(v => v.GetInt32()).ToArray();
+            byRow[rowIndex] = ((ushort)hash.GetInt32(), connections);
+            result.Add((rowIndex, new(row.GetProperty("Id").GetString() ?? "", (ushort)hash.GetInt32(),
                 wa.GetProperty("Name").GetString() ?? "", row.GetProperty("Tier").GetInt32(),
-                row.GetProperty("StartingNode").GetBoolean()));
+                row.GetProperty("StartingNode").GetBoolean(), [])));
         }
-        return result;
+        return [.. result.Select(x => x.Layout with
+        {
+            Connections = [.. byRow[x.Row].Connections.Where(byRow.ContainsKey).Select(c => byRow[c].Hash16)],
+        })];
     }
 
     static IReadOnlyDictionary<uint, int> LoadKeyTiers(ItemCatalog catalog, string folder)

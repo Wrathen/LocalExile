@@ -109,7 +109,10 @@ partial class Program
                 // The client generates the area at the seed of 0x1d: one the Gateway can generate too.
                 uint seed = AreaLayouts.PlayableSeed(areaHash, resolved.Seed);
                 ulong instanceId = resolved.Instance;
-                var layout = AreaLayouts.For(areaHash, seed);
+                int? mapLevel = resolved.Character is { } mapCharacter
+                    && MapDevice.OpenOf(mapCharacter) is { } mapOpen && mapOpen.Area.Hash16 == areaHash && mapOpen.Area.Level > 0
+                        ? mapOpen.Area.Level : null;
+                var layout = AreaLayouts.For(areaHash, seed, mapLevel);
                 AreaLayouts.Announce(layout, seed);
                 Console.WriteLine($"[gateway] {remote} ticket 0x{ticket:x8}: {resolved.Character ?? "?"} → instance {instanceId}, {layout.Describe()}");
 

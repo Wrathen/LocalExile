@@ -26,13 +26,16 @@ Part of [Status](../Status.md); what to build next in this area is in
   window (S?C 0x7b kind 0x2b) shows the four starting layouts; a node click (C?S 0x00e7) selects one and Activate opens
   it. Every character has the epilogue quest flag `EndGameAvailable`, without which the client refuses Atlas activation.
   Live 2026-10-29: selecting Estuary opened Estuary; Cells is the default.
-  Basic monster map drops use a local approximation.
+  Basic monster map drops use local rates; magic/rare monsters drop one tier above and unique map bosses two above.
+  A map's first unique-boss kill marks the layout completed and awards one temporary Atlas point.
   Atlas passive tree foundation (2026-10-30): the three saved presets are sent with their node lists and point budget
   (S→C 0x3d); C→S 0x3e/0x3f allocate/refund nodes and save them; `/atlas_tree` opens the tree and
   `/atlas_points <n>` sets the dev budget. Live: with 30 points, three "Map Drop Chance" nodes allocated and the
-  client updated the tree; the presets are saved. The Atlas graph and point awards from map completion are not
-  implemented, so connectivity is left to the client and the budget has no in-game source yet.
-  The selected layout is saved per character, and generic maps now use their tier as the area level (tier + 67).
+  client updated the tree; the presets are saved, and the active preset's map drop chance stat now affects map drops. The
+  Atlas graph and client progress message remain open; points are currently one per first map completion (temporary).
+  The selected layout is saved per character, and generic maps now use their tier as the area level (tier + 67); server-generated terrain, the area instance and monsters all receive it.
+  A map's first unique-boss kill is saved as a completed Atlas layout and awards one temporary Atlas point; completed
+  nodes unlock their AtlasNode connections server-side. Bonus objectives and the client progress message are still open.
   Atlas progress, Voidstones, map stash placement and official drop pools remain open.
   Code: `AtlasCatalog.cs`, `AtlasPassives.cs`, `MapDevice.cs`, `ItemDrops.cs`, `InstanceItems.cs`.
   Docs: [21](../docs/protocol/21-hideouts.md), [maps](../docs/game/maps.md), [05](../docs/protocol/05-inventories-and-ui.md).

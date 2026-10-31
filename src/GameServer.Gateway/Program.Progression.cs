@@ -56,6 +56,8 @@ partial class Program
             for (int i = 0; i < conn.AtlasPassives.Length; i++)
                 conn.AtlasPassives[i] = i < atlasPresets.Count ? [.. atlasPresets[i].Where(n => AtlasPassiveNodes.Find(n) is not null).Distinct()] : [];
             conn.AtlasPassivePoints = save?.AtlasPassivePoints ?? 0;
+            conn.AtlasActivePreset = (byte)Math.Clamp((int)(save?.AtlasActivePreset ?? 0), 0, 2);
+            conn.AtlasCompletedLayouts = [.. (save?.AtlasCompletedLayouts ?? []).Where(id => MapDevices.Value.Atlas?.Find(id) is not null)];
 
             // The Atlas layout picked on the map device is a character choice; fall back to the first starting node.
             if (save?.SelectedAtlasLayout is { } atlasId && MapDevices.Value.Atlas is { } atlas

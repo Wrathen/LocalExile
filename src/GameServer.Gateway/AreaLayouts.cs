@@ -100,12 +100,12 @@ static class AreaLayouts
     /// <summary>The seed the instance's layout is generated and played at (<see cref="ServerLevels.PlayableSeed"/>).</summary>
     public static uint PlayableSeed(ushort hash, uint seed) => ServerLevels.PlayableSeed(IdOf(hash), seed);
 
-    public static AreaLayout For(ushort hash, uint seed)
+    public static AreaLayout For(ushort hash, uint seed, int? level = null)
     {
         var hideout = HideoutCatalog.ByArea(hash);
         string id = IdOf(hash);
         // A hideout's waypoint is one of its decoration's doodads (21-hideouts.md §2), not a tile object.
-        var layout = WithoutWaypoint(hash, id, seed);
+        var layout = WithoutWaypoint(hash, id, seed, level);
         var waypoint = hideout is null ? WaypointCatalog.For(hash, id, seed) : HideoutCatalog.Waypoint(hideout);
         // League hubs whose tiles place no waypoint (the Rogue Harbour, the Monastery of the Keepers): one by the arrival,
         // so the player can travel back (the Waypoint type's own model).
@@ -113,10 +113,10 @@ static class AreaLayouts
         return layout with { Waypoint = waypoint };
     }
 
-    static AreaLayout WithoutWaypoint(ushort hash, string id, uint seed)
+    static AreaLayout WithoutWaypoint(ushort hash, string id, uint seed, int? level)
     {
         // An area the port reproduces is generated here from the seed; any other needs the client's capture.
-        if (ServerLevels.For(id, seed) is { } generated)
+        if (ServerLevels.For(id, seed, level) is { } generated)
             return WithCells(hash, id, seed, generated.Walk, generated.Width, generated.Height) with { CellHeights = generated.Heights };
         byte[]? cells = LoadCells(id, seed, out int w, out int h);
         return WithCells(hash, id, seed, cells, w, h);

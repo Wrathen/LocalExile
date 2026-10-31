@@ -152,12 +152,15 @@ sealed class ItemDrops(ItemCatalog catalog, ItemRolls? rolls = null, string fold
 
     /// <summary>An approximate generic-map drop: a map of the current map tier (or tier 1 in the campaign). Our own
     /// rates until the game pools are known.</summary>
-    public Drop? Map(int monsterLevel, MonsterRarity monster, int mapTier, Random rng)
+    public Drop? Map(int monsterLevel, MonsterRarity monster, int mapTier, Random rng, double chanceMultiplier = 1)
     {
         double chance = monster switch { MonsterRarity.Normal => 0.004, MonsterRarity.Magic => 0.012, MonsterRarity.Rare => 0.05, _ => 0.20 };
-        chance = Math.Min(1, chance * SystemSettings.Default.DropMultiplier("maps"));
+        chance = Math.Min(1, chance * SystemSettings.Default.DropMultiplier("maps") * Math.Max(0, chanceMultiplier));
         if (maps is null || chance <= 0 || rng.NextDouble() >= chance) return null;
-        int tier = Math.Clamp(mapTier > 0 ? mapTier : 1, 1, 16);
+        // Magic and rare monsters drop one map tier above the current map; unique map bosses drop two above (3.29 rules).
+        int current = mapTier > 0 ? mapTier : 1;
+        int bonus = mapTier > 0 ? monster switch { MonsterRarity.Magic or MonsterRarity.Rare => 1, MonsterRarity.Unique => 2, _ => 0 } : 0;
+        int tier = Math.Clamp(current + bonus, 1, 16);
         if (maps.KeyOfTier(tier) is not uint hash || catalog.ByHash(hash) is not { Supported: true } type) return null;
         var item = ItemCatalog.Create(type) with { ItemLevel = (byte)Math.Clamp(monsterLevel + ItemLevelBonus(monster), 1, 100) };
         if (rolls is not null && rng.NextDouble() < 0.10) item = rolls.Roll(item, ItemRarity.Magic, rng) with { Identified = true };

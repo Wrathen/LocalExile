@@ -58,7 +58,8 @@ static class CharacterSaves
         uint? Life = null, uint? Mana = null, VitalsSession? VitalsOwner = null, List<ushort>? ClusterPassives = null,
         ushort? Sulphite = null, Dictionary<ushort, string>? Tattoos = null,
         Dictionary<ushort, ushort>? TattooKeystones = null, List<List<ushort>>? AtlasPassivePresets = null,
-        ushort? AtlasPassivePoints = null, string? SelectedAtlasLayout = null)
+        ushort? AtlasPassivePoints = null, string? SelectedAtlasLayout = null, List<string>? AtlasCompletedLayouts = null,
+        byte? AtlasActivePreset = null)
     {
         /// <summary>Fields this build doesn't know (a newer build wrote them): kept as they are by the next write.</summary>
         [JsonExtensionData] public Dictionary<string, JsonElement>? Unknown { get; init; }
@@ -299,16 +300,22 @@ static class CharacterSaves
     public static void SetClusterPassives(string character, IEnumerable<ushort> nodes) =>
         Update(character, s => s with { ClusterPassives = [.. nodes] });
 
+    /// <summary>Records the Atlas map layouts whose boss has been completed.</summary>
+    public static void SetAtlasCompletedLayouts(string character, IEnumerable<string> layouts) =>
+        Update(character, s => s with { AtlasCompletedLayouts = [.. layouts.Distinct().Order(StringComparer.Ordinal)] });
+
     /// <summary>Records the Atlas layout selected on the map device, by AtlasNode Id.</summary>
     public static void SetAtlasLayout(string character, string layout) =>
         Update(character, s => s with { SelectedAtlasLayout = layout });
 
     /// <summary>Records the three Atlas passive presets (PassiveSkillGraphId lists) and the points the character has.</summary>
-    public static void SetAtlasPassives(string character, IReadOnlyList<IReadOnlyList<ushort>> presets, ushort points) =>
+    public static void SetAtlasPassives(string character, IReadOnlyList<IReadOnlyList<ushort>> presets, ushort points,
+        byte? activePreset = null) =>
         Update(character, s => s with
         {
             AtlasPassivePresets = [.. presets.Select(p => p.ToList())],
             AtlasPassivePoints = points,
+            AtlasActivePreset = activePreset ?? s.AtlasActivePreset,
         });
 
     /// <summary>Records the applied tattoos (passive node -> tattoo name). The map is independent of the allocated

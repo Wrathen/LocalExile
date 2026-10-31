@@ -446,6 +446,9 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     /// <summary>The three Atlas passive presets (PassiveSkillGraphId) and the points the character has; kept in its save.</summary>
     public List<ushort>[] AtlasPassives = [[], [], []];
     public ushort AtlasPassivePoints;
+    public byte AtlasActivePreset;
+    /// <summary>Atlas layouts whose boss has been completed (AtlasNode Ids), saved with the character.</summary>
+    public HashSet<string> AtlasCompletedLayouts = new(StringComparer.Ordinal);
     /// <summary>The cluster jewel nodes allocated in the tree's expansion cells: the client's own small ids, sent with
     /// the expansion flag (C->S 0x34/0x36) and carried in 0x33's second list. Empty until a cluster jewel is socketed.
     /// </summary>
