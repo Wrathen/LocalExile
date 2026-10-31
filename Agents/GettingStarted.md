@@ -219,7 +219,7 @@ builds each .NET tool once (`logs\extract-build-<project>.log`) and runs it with
 
 | Table | Rows on 3.29.3b | From |
 |---|---:|---|
-| `catalog_entries` | 1,302 uniques, 76 radius/threshold jewels, 43 unique jewels, 6 timeless jewels, 48 tattoo effects, 190 jewel art rows | the code arrays and the generated PoB unique catalogue |
+| `catalog_entries` | 1,297 uniques, 76 radius/threshold jewels, 43 unique jewels, 6 timeless jewels, 48 tattoo effects, 190 jewel art rows | the code arrays and the generated PoB unique catalogue |
 | `system_settings` | 45 | the code defaults |
 | `stats` / `mods` / `mod_stats` | 23,346 / 40,355 / 60,695 | `data\tables\Stats.json` and `data\tables\Mods.json` |
 | `effective_mod_stats` | view | `mod_stats` with `mod_stat_overrides` applied |

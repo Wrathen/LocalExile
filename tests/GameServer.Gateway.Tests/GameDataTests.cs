@@ -172,6 +172,13 @@ public class GameDataTests
         Assert.Equal(unique.BaseTypeId, uniqueBack.BaseTypeId);
         Assert.Equal(unique.ItemLevel, uniqueBack.ItemLevel);
         Assert.Equal(unique.Mods, uniqueBack.Mods);
+
+        // Rows written before these fields existed read as "keep the base's implicits, no overrides".
+        var older = JsonSerializer.Deserialize<UniqueCatalog.Definition>(
+            "{\"Name\":\"Old\",\"BaseTypeId\":\"x\",\"Mods\":[],\"ItemLevel\":255,\"Corrupted\":false}", options)!;
+        Assert.Null(older.Implicits);
+        Assert.Null(older.Ranges);
+        Assert.False(older.Mirrored);
     }
 
     [Fact]
@@ -326,7 +333,89 @@ public class GameDataTests
         Assert.Contains(UniqueItemSeed.All, entry => entry.Name == "Mageblood");
         Assert.Contains(UniqueItemSeed.All, entry => entry.Name == "Seven-League Step");
         Assert.Equal(3, UniqueItemSeed.All.Count(entry => entry.Name == "Grand Spectrum"));
-        Assert.Equal(1302, UniqueCatalog.Seed.Length);
+        Assert.Equal(1297, UniqueCatalog.Seed.Length);
+    }
+
+    sealed record SeedRow(string Key, string Value);
+
+    static string CatalogDatabase() =>
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"localexile-refresh-{Guid.NewGuid():N}.db");
+
+    static void DeleteDatabase(string path)
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        foreach (string file in new[] { path, path + "-wal", path + "-shm" })
+            if (File.Exists(file)) File.Delete(file);
+    }
+
+    static string Payload(GameDataStore store, string key) =>
+        store.LoadCatalog("test").Single(row => row.Key == key).Payload;
+
+    [Fact]
+    public void A_corrected_seed_reaches_unedited_rows_and_leaves_edits_and_deletions_alone()
+    {
+        string path = CatalogDatabase();
+        try
+        {
+            using var store = new GameDataStore(path);
+            SeedRow[] first = [new("same", "old"), new("edited", "old"), new("deleted", "old"), new("moved", "old")];
+            GameDataCatalog.Seed(store, "test", first, row => row.Key);
+            GameDataCatalog.RefreshSeed(store, "test", first, row => row.Key, "1");
+            Thread.Sleep(20);
+            store.PutCatalogRow("test", "edited", "{\"Key\":\"edited\",\"Value\":\"admin\"}");
+            store.DeleteCatalogRow("test", "deleted");
+
+            SeedRow[] second = [new("same", "new"), new("edited", "new"), new("deleted", "new"), new("moved2", "new")];
+            GameDataCatalog.Seed(store, "test", second, row => row.Key);
+            GameDataCatalog.RefreshSeed(store, "test", second, row => row.Key, "2");
+
+            var keys = store.LoadCatalog("test").Select(row => row.Key).ToHashSet();
+            Assert.Contains("new", Payload(store, "same"));
+            Assert.Contains("admin", Payload(store, "edited"));
+            Assert.DoesNotContain("deleted", keys);
+            Assert.DoesNotContain("moved", keys);
+            Assert.Contains("moved2", keys);
+        }
+        finally { DeleteDatabase(path); }
+    }
+
+    [Fact]
+    public void A_seed_revision_applies_once_and_keeps_a_later_edit()
+    {
+        string path = CatalogDatabase();
+        try
+        {
+            using var store = new GameDataStore(path);
+            SeedRow[] seed = [new("row", "old")];
+            GameDataCatalog.Seed(store, "test", seed, row => row.Key);
+            GameDataCatalog.RefreshSeed(store, "test", seed, row => row.Key, "1");
+            Thread.Sleep(20);
+            store.PutCatalogRow("test", "row", "{\"Key\":\"row\",\"Value\":\"admin\"}");
+
+            GameDataCatalog.RefreshSeed(store, "test", [new SeedRow("row", "new")], row => row.Key, "1");
+            Assert.Contains("admin", Payload(store, "row"));
+        }
+        finally { DeleteDatabase(path); }
+    }
+
+    [Fact]
+    public void A_disabled_row_stays_edited_through_a_seed_revision()
+    {
+        string path = CatalogDatabase();
+        try
+        {
+            using var store = new GameDataStore(path);
+            GameDataCatalog.Seed(store, "test", [new SeedRow("row", "old")], row => row.Key);
+            GameDataCatalog.RefreshSeed(store, "test", [new SeedRow("row", "old")], row => row.Key, "1");
+            Thread.Sleep(20);
+            store.PutCatalogRow("test", "row", Payload(store, "row"), enabled: false);
+
+            GameDataCatalog.RefreshSeed(store, "test", [new SeedRow("row", "new")], row => row.Key, "2");
+            var row = store.LoadCatalog("test").Single();
+            Assert.False(row.Enabled);
+            Assert.Contains("old", row.Payload);
+        }
+        finally { DeleteDatabase(path); }
     }
 
     [Fact]

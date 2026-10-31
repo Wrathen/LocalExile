@@ -1,6 +1,6 @@
 # Editable game data
 
-**Status: in progress (mod roll ranges, item limits, system numbers, the 1,302-row unique catalogue, the
+**Status: in progress (mod roll ranges, item limits, system numbers, the 1,297-row unique catalogue, the
 unique/jewel/tattoo catalogue rows and the Stats/Mods reference tables are editable; item templates and the admin UI
 are next).** This page analyses what can safely become editable from the database, what cannot, and the cache/reload
 shape the server uses so an edit takes effect without a restart. The schema and the `/game_data` commands below are
@@ -139,7 +139,7 @@ WHERE mod_id = 'LocalAddedPhysicalDamage9' ORDER BY stat_index;
 ```
 
 `/game_data reference` rebuilds the three reference tables from `data/tables` after an extraction change; the override
-rows are not touched. The full unique-item catalogue is `catalog_entries.kind = 'unique_item'` with 1,302 rows from
+rows are not touched. The full unique-item catalogue is `catalog_entries.kind = 'unique_item'` with 1,297 rows from
 PoB's Export/Uniques files; `unique_item` keys are `name|base` because a few names have several bases. The two curated
 3.29 definitions (Mageblood and Crown of Eyes) stay first for their established item behavior.
 
@@ -149,7 +149,7 @@ The first slice covers mod ranges and limits; the item/jewel catalogue rows belo
 
 | Candidate | Where | State | Why / what it unlocks |
 |---|---|---|---|
-| Unique item definitions | `UniqueCatalog.Seed` | **Done** | Base, mod ids and values for Mageblood, Crown of Eyes and the rest; the seed is the current two definitions. Uses existing client hashes. |
+| Unique item definitions | `UniqueCatalog.Seed` | **Done** | Base, implicits, mod ids and roll overrides for Mageblood, Crown of Eyes and the rest (`scripts/re/unique_items.py`). Uses existing client hashes. |
 | Radius jewel definitions and variants | `RadiusJewelCatalogue.Seed`, `RingVariants`, `NodeVariants` | **Done** | 76 jewel rows (43 radius + 33 threshold), base/mod/variant/value/limit. The shared variant arrays stay code constants. |
 | Non-radius unique jewels | `UniqueJewelCatalogue.SeedGlobal`, `SeedSpecial` | **Done** | 42 global + 1 special jewel definitions generated from PoB. |
 | Threshold jewel definitions | `ThresholdJewelCatalogue.Seed` | **Done** | 33 threshold jewels with base, limit and client mods. |
@@ -337,6 +337,13 @@ keys new to the current seed, so a row deleted by an admin (or a whole kind empt
 with this tracking, an existing catalogue is kept and the current seed becomes the baseline, preserving deletions made
 before the table existed. `catalog_seeded:<kind>` in `game_data_meta` remains as an informational first-run flag.
 
+A seed correction would not reach those rows by itself, so `GameDataCatalog.UniqueSeedRevision` carries it: raise it
+when `UniqueItemSeed` corrects existing rows. On the first start with a new revision, `RefreshSeed` gives the new
+default to every `unique_item` row last written no later than the previous seed (`catalog_seed_written:<kind>`, else
+`catalog_seeded:<kind>`), since an edit or a disable writes a row's `updated_utc`; it removes such a row
+whose key left the seed, as a corrected base type changes the key. Edited rows stay. A deleted row stays deleted,
+unless the correction gave that unique a new key, which reads as a new default.
+
 `Mod` keeps its base `ModStat` values. The effective range is resolved through a `ModRangeProvider` held by the
 `ModCatalog`:
 
@@ -430,7 +437,7 @@ server process edits the same file later, add a `revision` check or a file-watch
    through `RangeAt`/`MaxValues`, DB set/clear commands, tests. This proves the no-restart cache.
 3. **Limits (done).** `LimitSettings` for timeless, radius jewels, Impossible Escape and tattoo groups; the hard-coded
    checks now read the effective limit; tests cover the changed group limit.
-4. **Content catalogues (done).** `catalog_entries` stores the full 1,302-row unique-item catalogue (generated from
+4. **Content catalogues (done).** `catalog_entries` stores the full 1,297-row unique-item catalogue (generated from
    PoB's Export/Uniques files), radius jewels, threshold jewels, unique jewels, timeless jewels, tattoo effects and
    unique jewel art. `stats`/`mods`/`mod_stats` hold the default stat keys and ranges behind
    `effective_mod_stats`. The current code arrays seed each kind on the first run; after that the database is the

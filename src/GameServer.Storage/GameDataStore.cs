@@ -360,6 +360,21 @@ public sealed class GameDataStore : IDisposable
         }
     }
 
+    /// <summary>The keys of a kind's rows last written no later than <paramref name="since"/> (a round-trip UTC time):
+    /// every edit rewrites a row's time, so these are the rows nobody changed after that moment.</summary>
+    public IReadOnlySet<string> CatalogKeysWrittenBy(string kind, string since)
+    {
+        lock (_gate)
+        {
+            using var command = Command("SELECT key FROM catalog_entries WHERE kind = $kind AND updated_utc <= $since",
+                ("$kind", kind), ("$since", since));
+            using var reader = command.ExecuteReader();
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            while (reader.Read()) keys.Add(reader.GetString(0));
+            return keys;
+        }
+    }
+
     public void PutCatalogRow(string kind, string key, string payload, bool enabled = true)
     {
         if (string.IsNullOrWhiteSpace(kind)) throw new ArgumentException("catalog kind is empty", nameof(kind));

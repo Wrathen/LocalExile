@@ -19,6 +19,15 @@ public enum ItemRarity : byte { Normal = 0, Magic = 1, Rare = 2, Unique = 3 }
 /// </summary>
 public enum ModSection : byte { Implicit = 4, Explicit = 5, Enchant = 6, Scourge = 10, Hidden = 11 }
 
+/// <summary>An item's influences, the Base component's u8 +0xc6: one bit per InfluenceTags/InfluenceExalts Influence row, in
+/// that order (the conqueror names follow InfluenceExalts). The client refuses crafting on it (0x141d57ea0 tests it for
+/// zero) and draws it (0x1415703a0 reads each bit). Agents/docs/protocol/13-items.md §2.</summary>
+[Flags]
+public enum ItemInfluence : byte
+{
+    None = 0, Shaper = 1 << 0, Elder = 1 << 1, Crusader = 1 << 2, Redeemer = 1 << 3, Hunter = 1 << 4, Warlord = 1 << 5,
+}
+
 /// <summary>A mod on an item: a Mods.dat row by its HASH16 and one value per stat of that row (StatsKey1..8 in order,
 /// as many as the row has). The client counts the row's stats itself, so the count must match.</summary>
 public sealed record ItemMod(ModSection Section, ushort Hash, IReadOnlyList<int> Values);
@@ -78,6 +87,15 @@ public sealed record Item(uint TypeHash, IReadOnlyList<string> Components, ushor
     /// Mods component's flag bit 1 (+0x2df, a plain bool: the client refuses crafting on it, 0x141d68f9b).</summary>
     public bool Mirrored { get; init; }
 
+    /// <summary>Influences, the Base component's u8 +0xc6. Their mods are ordinary affixes, which these open by tag.</summary>
+    public ItemInfluence Influences { get; init; }
+
+    /// <summary>Split: the Mods component's flag bit 2 (+0x2e0, "split" in its debug dump 0x1421e1190).</summary>
+    public bool Split { get; init; }
+
+    /// <summary>Synthesised: the Mods component's flag bit 5 (+0x2e5, "synthetic" in its debug dump 0x1421e1190).</summary>
+    public bool Synthesised { get; init; }
+
     /// <summary>The indexes in <see cref="Mods"/> of the fractured explicit mods.</summary>
     public IReadOnlySet<int> FracturedIndexes() => Mods.Select((m, i) => (m, i)).Where(p => p.m.Section == ModSection.Explicit)
         .Take(FracturedCount).Select(p => p.i).ToHashSet();
@@ -129,11 +147,11 @@ public sealed record Item(uint TypeHash, IReadOnlyList<string> Components, ushor
                 // 0x1421e69c0: u16 ItemVisualIdentity HASH16 (null → "Attempt to set visual identity to NULL"), u8 +0xc0,
                 // u8 +0xc7 flags, u16 flags (low: bit0 → u8 +0xc5, bit1 flavour text u16, bit2 wide string, bit3 u32,
                 // bit4 wide string, bit5 u8 n × (u32, i32), bit6 nested item, bit7 u8 n × (u32 item type, compact);
-                // high: bits 0-2 → +0xc4, bit4 → 2 × u32), u8 +0xc6.
+                // high: bits 0-2 → +0xc4, bit4 → 2 × u32), u8 +0xc6 the influences.
                 // Bit 7 (a vendor price): u8 n, then n × (u32 item type hash, compact uint amount; 0x141fa5290 looks the type
                 // up, 0x141e61010 reads the amount); stored in the Base's +0xb8 item list.
                 case "Base":
-                    w.U16(VisualIdentity).U8(0).U8((byte)(Corrupted ? 1 : 0)).U16((ushort)(Price.Count > 0 ? 0x80 : 0)).U8(0);
+                    w.U16(VisualIdentity).U8(0).U8((byte)(Corrupted ? 1 : 0)).U16((ushort)(Price.Count > 0 ? 0x80 : 0)).U8((byte)Influences);
                     if (Price.Count > 0)
                     {
                         w.U8((byte)Price.Count);
@@ -151,10 +169,13 @@ public sealed record Item(uint TypeHash, IReadOnlyList<string> Components, ushor
                 case "Armour":
                     w.U8(DefenceBaseRoll);
                     break;
-                // 0x1421df6e0: u8 +0x2b8 (item level), u8 +0x2bc (level requirement, kept as sent), u16 flags (bit 6
-                // incubator, bit 4 → u8, bit 15 a 0x1c8 record), the base magic properties 0x142201d70 (MagicProperties), u8, u8.
+                // 0x1421df6e0: u8 +0x2b8 (item level), u8 +0x2bc (level requirement, kept as sent), u16 flags (bit 1
+                // duplicated, the mirrored state; bit 2 split; bit 3 disable_mirrored_visuals; bit 4 relic → a u8 after the
+                // incubator; bit 5 synthetic; bit 6 incubator; bit 7 a 0x1c8 record; bit 10 vestigial), the base magic
+                // properties 0x142201d70 (MagicProperties), u8, u8.
                 case "Mods":
-                    w.U8(ItemLevel).U8((byte)Math.Clamp(RequiredLevel ?? LevelRequirementOf?.Invoke(this) ?? 0, 0, 255)).U16((ushort)(Mirrored ? 0x2 : 0));
+                    w.U8(ItemLevel).U8((byte)Math.Clamp(RequiredLevel ?? LevelRequirementOf?.Invoke(this) ?? 0, 0, 255))
+                        .U16((ushort)((Mirrored ? 0x2 : 0) | (Split ? 0x4 : 0) | (Synthesised ? 0x20 : 0)));
                     MagicProperties(w); w.U8(0).U8(0);
                     break;
                 case "Quality": w.U8(Quality); break;                 // 0x1424aec50

@@ -13,6 +13,10 @@ static class GameDataCatalog
     public sealed record VisualRow(string Name, ushort Hash);
 
     static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Raise when UniqueItemSeed corrects existing rows, so that databases already seeded take the correction.</summary>
+    const string UniqueSeedRevision = "3";
+
     static readonly UniqueCatalog.Definition[] UniqueSeed = UniqueCatalog.Seed;
     static readonly RadiusJewelCatalogue.Entry[] RadiusSeed = RadiusJewelCatalogue.Seed;
     static readonly RadiusJewelCatalogue.Entry[] ThresholdSeed = ThresholdJewelCatalogue.Seed;
@@ -85,6 +89,7 @@ static class GameDataCatalog
     {
         if (kind == "unique_item") MigrateUniqueKeys(store);
         Seed(store, kind, seed, key);
+        if (kind == "unique_item") RefreshSeed(store, kind, seed, key, UniqueSeedRevision);
         return [.. store.LoadCatalog(kind).Where(row => row.Enabled)
             .Select(row => JsonSerializer.Deserialize<T>(row.Payload, Json)
                 ?? throw new InvalidOperationException($"catalog {kind} row {row.Key} is empty"))];
@@ -121,6 +126,28 @@ static class GameDataCatalog
         }
         if (!seedKeys.SetEquals(applied)) store.ReplaceSeededKeys(kind, seedKeys);
         if (!store.CatalogSeeded(kind)) store.MarkCatalogSeeded(kind);
+    }
+
+    /// <summary>
+    /// <see cref="Seed"/> never changes a row it wrote, so a corrected seed would not reach an existing database. When
+    /// <paramref name="revision"/> is new, the rows nobody edited since the last seed take their new defaults, and those
+    /// whose key left the seed go (a base type correction changes the key). Edited rows stay as they are, and so do
+    /// rows an admin deleted, unless the correction gave them a new key.
+    /// </summary>
+    internal static void RefreshSeed<T>(GameDataStore store, string kind, T[] seed, Func<T, string> key, string revision)
+    {
+        string revisionKey = "catalog_seed_revision:" + kind, writtenKey = "catalog_seed_written:" + kind;
+        if (store.Meta(revisionKey) == revision) return;
+        if ((store.Meta(writtenKey) ?? store.Meta("catalog_seeded:" + kind)) is { } written)
+        {
+            var defaults = seed.ToDictionary(key, entry => JsonSerializer.Serialize(entry, Json), StringComparer.Ordinal);
+            var unedited = store.CatalogKeysWrittenBy(kind, written);
+            foreach (var row in store.LoadCatalog(kind).Where(row => unedited.Contains(row.Key)))
+                if (!defaults.TryGetValue(row.Key, out string? payload)) store.DeleteCatalogRow(kind, row.Key);
+                else if (payload != row.Payload) store.PutCatalogRow(kind, row.Key, payload, row.Enabled);
+        }
+        store.SetMeta(revisionKey, revision);
+        store.SetMeta(writtenKey, DateTime.UtcNow.ToString("O"));
     }
 
     /// <summary>The first full-catalogue build used the unique name alone as the key; move those rows aside once so

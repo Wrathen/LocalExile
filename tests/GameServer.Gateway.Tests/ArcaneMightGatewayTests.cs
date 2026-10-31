@@ -178,10 +178,11 @@ public partial class SpellNoDamageTests
         Assert.Equal(350, offense.Hit[DamageType.Chaos].Min); // 100 * 2.5 * 140% effectiveness.
         Assert.Equal(350, offense.AreaHit![DamageType.Chaos].Min);
         Assert.Equal(.6, use.Profile.ContactArea!.Multiplier); // Only the secondary explosion takes 40% less.
-        // Keep only one existing damage route to make the target's life-loss assertion unambiguous.
+        // Keep only one existing damage route to make the target's life-loss assertion unambiguous. An attack gem leaves
+        // from the weapon's contact keyframe, so the range is measured from there: it ends just past the target.
         use = use with { Profile = use.Profile with
         {
-            Count = 1, Speed = 100, Range = 28, Radius = .1, Pierce = 0,
+            Count = 1, Speed = 100, Range = 61.5 - use.Origin.X, Radius = .1, Pierce = 0,
             DirectDamage = !area, ContactArea = null, Pulse = null, EndEmission = null,
             EndArea = area ? new("arcane-snapshot-area", 5, Multiplier: .6) : null,
         } };

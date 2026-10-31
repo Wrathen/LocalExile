@@ -22,13 +22,30 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     public sealed record Word(uint Key, string Text, int List, IReadOnlyList<(string Tag, int Weight)> SpawnWeights);
 
     private readonly Lazy<List<Word>> _words = new(() => LoadWords(folder));
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<(int Row, int Level), IReadOnlyList<(ModCatalog.Mod, int)>> _pools = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(int Row, int Level, ItemInfluence Influences), IReadOnlyList<(ModCatalog.Mod, int)>> _pools = new();
+    private readonly Lazy<Dictionary<(int Class, int Influence), string>> _influenceTags = new(() => LoadInfluenceTags(folder));
 
-    /// <summary>The affixes that can roll on this base at this item level.</summary>
-    public IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> Pool(ItemCatalog.BaseType t, int itemLevel) =>
-        _pools.GetOrAdd((t.Row, itemLevel), _ => [.. catalog.Mods.All
-            .Where(m => m.Domain == t.ModDomain && m.GenerationType is Prefix or Suffix && m.Level <= itemLevel && !m.EssenceOnly)
-            .Select(m => (m, m.WeightFor(t.Tags))).Where(p => p.Item2 > 0)]);
+    /// <summary>The affixes that can roll on this base at this item level. Influence mods are ordinary affixes behind a
+    /// tag per item class (InfluenceTags.dat: boots_shaper, ring_eyrie …), so an influence opens them.</summary>
+    public IReadOnlyList<(ModCatalog.Mod Mod, int Weight)> Pool(ItemCatalog.BaseType t, int itemLevel,
+        ItemInfluence influences = ItemInfluence.None) =>
+        _pools.GetOrAdd((t.Row, itemLevel, influences), _ =>
+        {
+            var tags = TagsWith(t, influences);
+            return [.. catalog.Mods.All
+                .Where(m => m.Domain == t.ModDomain && m.GenerationType is Prefix or Suffix && m.Level <= itemLevel && !m.EssenceOnly)
+                .Select(m => (m, m.WeightFor(tags))).Where(p => p.Item2 > 0)];
+        });
+
+    IReadOnlySet<string> TagsWith(ItemCatalog.BaseType t, ItemInfluence influences)
+    {
+        if (influences == ItemInfluence.None) return t.Tags;
+        var tags = new HashSet<string>(t.Tags);
+        foreach (var influence in Enum.GetValues<ItemInfluence>().Where(i => i != ItemInfluence.None && influences.HasFlag(i)))
+            if (_influenceTags.Value.TryGetValue((t.ClassRow, System.Numerics.BitOperations.TrailingZeroCount((int)influence)), out string? tag))
+                tags.Add(tag);
+        return tags;
+    }
 
     /// <summary>The item and its base accept affix changes: the item is not corrupted or mirrored, has Mods, and its
     /// base is known, serializable, has Mods and is not unmodifiable.</summary>
@@ -47,7 +64,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     public Item? Transmute(Item item, Random random)
     {
         if (item.Rarity != ItemRarity.Normal || !TryModifiable(item, out var type) ||
-            Pool(type, item.ItemLevel).Count == 0) return null;
+            Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         return Roll(item, ItemRarity.Magic, random, respectMetamods: true) with { Identified = true };
     }
 
@@ -73,7 +90,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     public Item? Alter(Item item, Random random)
     {
         if (item.Rarity != ItemRarity.Magic || !TryModifiable(item, out var type) ||
-            Pool(type, item.ItemLevel).Count == 0) return null;
+            Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         return Roll(item, ItemRarity.Magic, random, respectMetamods: true) with { Identified = true };
     }
 
@@ -82,7 +99,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     public Item? Alchemy(Item item, Random random)
     {
         if (item.Rarity != ItemRarity.Normal || item.Components.Contains("Flask") || !TryModifiable(item, out var type) ||
-            Pool(type, item.ItemLevel).Count == 0) return null;
+            Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         return Roll(item, ItemRarity.Rare, random) with { Identified = true };
     }
 
@@ -101,7 +118,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     public Item? Chaos(Item item, Random random)
     {
         if (item.Rarity != ItemRarity.Rare || item.Components.Contains("Flask") || !TryModifiable(item, out var type) ||
-            Pool(type, item.ItemLevel).Count == 0) return null;
+            Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         return Roll(item, ItemRarity.Rare, random, respectMetamods: true) with { Identified = true };
     }
 
@@ -187,19 +204,19 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
     {
         if (item.Rarity != ItemRarity.Normal ||
             !(item.Components.Contains("Weapon") || item.Components.Contains("Armour")) ||
-            !TryModifiable(item, out var type) || Pool(type, item.ItemLevel).Count == 0) return null;
+            !TryModifiable(item, out var type) || Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         return (random.Next(100) < 30 ? Roll(item, ItemRarity.Rare, random)
             : Roll(item, ItemRarity.Magic, random, (random.Next(2, 5), 2))) with { Identified = true };
     }
 
     /// <summary>Fracturing Orb: a rare item with at least four explicit mods, not corrupted, mirrored, fractured,
     /// unmodifiable or of a class the game cannot fracture, has one random explicit mod fractured. It moves to the
-    /// front of the explicits and from then on no currency removes or changes it. The orb does not respect metamods;
-    /// item influence and synthesis are not modelled.</summary>
+    /// front of the explicits and from then on no currency removes or changes it. The orb does not respect metamods.
+    /// Influenced and synthesised items are refused (ItemErrorCannotFractureSpecialItems, poewiki).</summary>
     public Item? Fracture(Item item, Random random)
     {
-        if (item.Rarity != ItemRarity.Rare || item.FracturedCount > 0 || !TryModifiable(item, out var type) ||
-            !type.CanBeFractured) return null;
+        if (item.Rarity != ItemRarity.Rare || item.FracturedCount > 0 || item.Influences != ItemInfluence.None || item.Synthesised ||
+            !TryModifiable(item, out var type) || !type.CanBeFractured) return null;
         var explicits = item.Mods.Select((m, i) => (m, i)).Where(p => p.m.Section == ModSection.Explicit).ToList();
         if (explicits.Count < 4) return null;
         var (mod, index) = explicits[random.Next(explicits.Count)];
@@ -224,7 +241,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
         bool target = item.Components.Contains("Weapon") || item.Components.Contains("Armour") ||
             type.Class is "Ring" or "Amulet" or "Belt";
         if (!target || item.Rarity == ItemRarity.Unique || !TryModifiable(item, out _) ||
-            Pool(type, item.ItemLevel).Count == 0) return null;
+            Pool(type, item.ItemLevel, item.Influences).Count == 0) return null;
         int roll = random.Next(100);
         Item result = item.Rarity != ItemRarity.Rare || roll >= 90 ? Roll(item, ItemRarity.Rare, random)
             : ReplaceAffixes(item, roll switch { < 20 => 1, < 40 => 2, < 60 => 3, < 80 => 4, _ => 5 }, random);
@@ -275,7 +292,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
                 ? (rng.Next(1, 3), 1, 1)
                 : RarePlan(t, rng);
         var generation = new MetacraftRules(item with { Mods = kept }, catalog.Mods);
-        var pool = Pool(t, Math.Min(item.ItemLevel, maxModLevel ?? item.ItemLevel))
+        var pool = Pool(t, Math.Min(item.ItemLevel, maxModLevel ?? item.ItemLevel), item.Influences)
             .Where(p => !respectMetamods || generation.Allows(p.Mod)).ToList();
         var chosen = kept.Where(m => m.Section == ModSection.Explicit).Select(m => catalog.Mods.ByHash(m.Hash)).OfType<ModCatalog.Mod>().ToList();
         int keptCount = chosen.Count;
@@ -379,7 +396,7 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
         if (catalog.ByHash(item.TypeHash) is not { } t) return [];
         var have = item.Mods.Where(m => m.Section == ModSection.Explicit).Select(m => catalog.Mods.ByHash(m.Hash)).OfType<ModCatalog.Mod>().ToList();
         var rules = new MetacraftRules(item, catalog.Mods);
-        return [.. Pool(t, item.ItemLevel).Where(p => (!respectMetamods || rules.Allows(p.Mod)) &&
+        return [.. Pool(t, item.ItemLevel, item.Influences).Where(p => (!respectMetamods || rules.Allows(p.Mod)) &&
             have.Count(h => h.GenerationType == p.Mod.GenerationType) < (p.Mod.GenerationType == Prefix ? max.Prefix : max.Suffix) &&
             !have.Any(h => h.Families.Intersect(p.Mod.Families).Any()) && (requiredTag is null || p.Mod.Tags.Contains(requiredTag)))];
     }
@@ -441,6 +458,20 @@ sealed class ItemRolls(ItemCatalog catalog, string folder = "data", SystemSettin
             pick -= weight;
         }
         return choices[^1].Item;
+    }
+
+    /// <summary>InfluenceTags.dat: the tag an influence (0 Shaper … 5 Warlord) gives an item class.</summary>
+    static Dictionary<(int Class, int Influence), string> LoadInfluenceTags(string folder)
+    {
+        var result = new Dictionary<(int, int), string>();
+        string path = Path.Combine(folder, "tables", "InfluenceTags.json"), tagsPath = Path.Combine(folder, "tables", "Tags.json");
+        if (!File.Exists(path) || !File.Exists(tagsPath)) return result;
+        using var tags = JsonDocument.Parse(File.ReadAllBytes(tagsPath));
+        using var rows = JsonDocument.Parse(File.ReadAllBytes(path));
+        foreach (var r in rows.RootElement.EnumerateArray())
+            result[(r.GetProperty("ItemClass").GetInt32(), r.GetProperty("Influence").GetInt32())] =
+                tags.RootElement[r.GetProperty("Tag").GetInt32()].GetProperty("Id").GetString() ?? "";
+        return result;
     }
 
     static List<Word> LoadWords(string folder)

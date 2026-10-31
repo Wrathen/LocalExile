@@ -220,6 +220,9 @@ G = global / static data.
 | `0x141fa5290` | Fn | ItemTypeRegister lookup by HASH32 |
 | `0x1421ebe90` | Fn | the four type hashes with a trailing u16 |
 | `0x1421e69c0`, `0x1421df6e0`, `0x1421e2e20`, `0x1424aec50`, `0x14249d4b0`, `0x1423f4b30`, `0x14246eb00` | Fn | item component reads: Base, Mods, Sockets, Quality, Charges, Stack, SkillGem |
+| `0x1421e7570`, `0x1421e1190` | Fn | debug dumps of the Base and Mods components: each field's name ([13](13-items.md) §2f) |
+| `0x1415703a0` | Fn | an item's render flags: Base +0xc6 influences, Mods relic, synthetic, fractured ([13](13-items.md) §2f) |
+| `0x1424df5c0` | Fn | a mod line's display kind: crafted, fractured, mutated, divergent |
 | `0x142201d70` | Fn | ObjectMagicProperties read: rarity, identified, mod lists, name ([13](13-items.md) §2a) |
 | `0x142430380` / `0x142430710` | Fn | one mod read (u16 Mods.dat HASH16 + a compact per stat) / the mod's n-th stat |
 | `0x1421ff3c0` → `0x1421ff8f0` | Fn | after the read: rarity tag, apply each mod list with its kind |

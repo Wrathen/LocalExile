@@ -146,7 +146,7 @@ sealed class BenchCrafting(ItemCatalog catalog, ItemRolls rolls, string folder =
         int maxEach = type.Class is "Jewel" or "AbyssJewel" ? 2 : 3;
         for (int n = 0; n < count; n++)
         {
-            var pool = rolls.Pool(type, item.ItemLevel).Where(p =>
+            var pool = rolls.Pool(type, item.ItemLevel, item.Influences).Where(p =>
                 rules.Allows(p.Mod) &&
                 present.Count(m => m.GenerationType == p.Mod.GenerationType) < maxEach &&
                 !present.Any(m => m.Hash == p.Mod.Hash || m.Families.Intersect(p.Mod.Families).Any())).ToList();

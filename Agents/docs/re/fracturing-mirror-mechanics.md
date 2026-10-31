@@ -51,7 +51,7 @@ contracts and logbooks, and false for currency, gems, fragments, tinctures and r
 Local rule (`ItemRolls.Fracture`): the item must be rare, have at least four explicit mods, be neither corrupted,
 mirrored nor already fractured, have a supported base with `Mods`, not be `Unmodifiable`, and its class must have
 `CanBeFractured`. One explicit is drawn uniformly (metamod-protected mods included), moved to the front of the
-explicits, and counted by `Item.FracturedCount`. Item influence, synthesis and veiled modifiers are not modelled by
+explicits, and counted by `Item.FracturedCount`. Influenced and synthesised items are refused; veiled modifiers are not modelled by
 LocalExile, so those refusals cannot be exercised locally.
 
 ## Mirror of Kalandra

@@ -52,7 +52,7 @@ claim of audited parity for every possible affix: exact pricing of all legacy/un
 reference verification. Native special price classes (Kingmaker, fossil extra sale rewards, Crucible and similar)
 are rejected explicitly until implemented; never silently downgraded to a fragment price.
 
-The current item model has no complete influence or unique-definition identity/creation support. Influenced sets,
+Items carry influences ([13](13-items.md) §2f), but no recipe reads them yet. Influenced sets,
 named unique combinations (Loreweave, Kingmaker, The Taming, etc.), catalyst quality recipes, Breach blessing
 conversions, random catalyst/scarab exchanges, bandit reform books and other special league recipes are **not
 implemented**. The map upgrade uses Maps.dat's target, not the full official atlas-combination selection algorithm.

@@ -120,7 +120,7 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   `maximum_siphoning_charges_per_elder_or_shaper_item_equipped`), so they need, in the items area, unique definitions
   beyond Mageblood (#60), abyss jewels socketable into abyssal sockets (the Stygian Vise is created without its socket,
   `PlayerInventories.Socket` takes gems only, `ItemModStats.Global` reads no socketed item's mods) and Shaper/Elder
-  influence on the `Item` record with its Base component wire flags (undocumented in 13-items.md). Blitz and Challenger
+  a consumer for `Item.Influences` (13-items.md §2f). Blitz and Challenger
   Charges have no 3.29 player source at all.
   Selected area/item-rarity/minion-increased aliases now use one raw actor-plus-own snapshot, with explicit final
   zero/replacement precedence, source clearing and Cyclone radius preservation. `SendPlayer` initial/transition
