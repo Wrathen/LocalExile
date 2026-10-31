@@ -24,13 +24,27 @@ public static class BundleFile
     public static int DecompressedSize(ReadOnlySpan<byte> bundle)
         => BinaryPrimitives.ReadInt32LittleEndian(bundle[DecompressedSizeOffset..]);
 
+    /// <summary>A bundle's decompressed size and its chunk size (every chunk but the last decompresses to it).</summary>
+    public static (int DecompressedSize, int Granularity) Layout(ReadOnlySpan<byte> bundle)
+        => (DecompressedSize(bundle), BinaryPrimitives.ReadInt32LittleEndian(bundle[GranularityOffset..]));
+
     public static byte[] DecompressWhole(ReadOnlySpan<byte> bundle, IOodleDecoder decoder)
     {
         int size = DecompressedSize(bundle);
         return DecompressSlice(bundle, 0, size, decoder);
     }
 
+    /// <summary>Decompresses chunk <paramref name="chunk"/> of a bundle (its compressed bytes) to
+    /// <paramref name="decompressedSize"/> bytes; the result may be a cached array the caller must not change.</summary>
+    public delegate byte[] ChunkDecoder(int chunk, ReadOnlySpan<byte> compressed, int decompressedSize);
+
     public static byte[] DecompressSlice(ReadOnlySpan<byte> bundle, int sliceOffset, int sliceSize, IOodleDecoder decoder)
+    {
+        ArgumentNullException.ThrowIfNull(decoder);
+        return DecompressSlice(bundle, sliceOffset, sliceSize, (_, compressed, size) => decoder.Decompress(compressed.ToArray(), size));
+    }
+
+    public static byte[] DecompressSlice(ReadOnlySpan<byte> bundle, int sliceOffset, int sliceSize, ChunkDecoder decoder)
     {
         ArgumentNullException.ThrowIfNull(decoder);
         if (sliceSize < 0)
@@ -45,10 +59,11 @@ public static class BundleFile
         int decompOffset = 0;
         int destOffset = 0;
 
-        for (int idx = 0; idx < chunkCount; idx++)
+        // Only the chunks the slice overlaps are copied and decompressed: a terrain file is a few KB of a bundle of
+        // hundreds of chunks, and copying every chunk for each read was most of a level generation's time.
+        for (int idx = 0; idx < chunkCount && decompOffset < sliceOffset + sliceSize; idx++)
         {
             int chunkSize = BinaryPrimitives.ReadInt32LittleEndian(bundle.Slice(ChunkSizesOffset + (idx * 4), 4));
-            var chunk = bundle.Slice(chunkBegin, chunkSize).ToArray();
 
             int decompChunkSize = (idx == chunkCount - 1)
                 ? decompressedSize - decompOffset
@@ -60,7 +75,7 @@ public static class BundleFile
                 int begin = Math.Max(sliceOffset - decompOffset, 0);
                 int end = Math.Min(sliceOffset + sliceSize - decompOffset, decompChunkSize);
 
-                byte[] raw = decoder.Decompress(chunk, decompChunkSize);
+                byte[] raw = decoder(idx, bundle.Slice(chunkBegin, chunkSize), decompChunkSize);
                 if (raw.Length < end)
                     throw new GgpkFormatException($"chunk produced {raw.Length} bytes, need {end}");
 

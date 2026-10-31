@@ -35,14 +35,25 @@ static class ServerLevels
 
     static readonly bool Enabled = Environment.GetEnvironmentVariable("Game_SERVER_LEVELS") != "0";
     static readonly object Gate = new();
-    static HashSet<string>? _supported;
+    static volatile HashSet<string>? _supported;
+    static readonly Lock SupportedGate = new();
     static TerrainCache? _files;
     static GameFileSystem? _fs;
-    static readonly ConcurrentDictionary<(string Area, uint Seed), Level?> Generated = new();
-    // The order they were generated in: with random seeds every new instance is a new (area, seed), so only the last
-    // Kept stay (a level is several MB); an older one is generated again when asked for.
-    static readonly Queue<(string Area, uint Seed)> Order = new();
-    const int Kept = 24;
+    // The levels kept for the next entry, with when each was last asked for (a timestamp written without a lock: the
+    // projectile and height lookups ask on every step). With random seeds every new instance is a new (area, seed), so
+    // only the Kept most recently used stay (a level's grids are ~11 MB: 24 of them were 265 MB in the perf benchmark);
+    // an older one is generated again when asked for (0.2 s median, 0.6 s at most there; performance.md). A failed
+    // generation (null) is kept too, so it is not retried, and goes first.
+    sealed class KeptLevel(Level? level)
+    {
+        public readonly Level? Level = level;
+        public long UsedAt = Stopwatch.GetTimestamp();
+    }
+    static readonly ConcurrentDictionary<(string Area, uint Seed), KeptLevel> Generated = new();
+    // Every level still in use: a connection's AreaLayout holds its level (AreaLayout.Level), so a level stays
+    // available, and is never generated again, while anybody plays it, however many others are generated meanwhile.
+    static readonly ConcurrentDictionary<(string Area, uint Seed), WeakReference<Level>> Live = new();
+    const int Kept = 8;
     // Why the last generations that failed did (the exception in full), for the capture tour's records.
     static readonly ConcurrentDictionary<(string Area, uint Seed), string> Errors = new();
 
@@ -53,36 +64,63 @@ static class ServerLevels
     public static bool IsSupported(string areaId)
     {
         if (!Enabled) return false;
-        lock (Gate) return (_supported ??= LoadSupported(BaselineFile)).Contains(areaId);
+        var supported = _supported;
+        if (supported is null)
+            lock (SupportedGate) supported = _supported ??= LoadSupported(BaselineFile);
+        return supported.Contains(areaId);
     }
 
     /// <summary>Drops the supported list, so the next check reads <see cref="BaselineFile"/> again (tests).</summary>
-    internal static void Reload() { lock (Gate) _supported = null; }
+    internal static void Reload() { lock (SupportedGate) _supported = null; }
 
     /// <summary>The supported areas of a gate baseline (<see cref="GameServer.Core.World.ServerLevelAreas.Load"/>).</summary>
     internal static HashSet<string> LoadSupported(string file) =>
         GameServer.Core.World.ServerLevelAreas.Load(file, m => Console.WriteLine($"[gateway] server levels: {m}"));
 
     /// <summary>The generated layout of (area, seed), or null when the area is not supported or generation failed
-    /// (the Gateway then falls back to the capture). Generated once per (area, seed) and kept while among the last
-    /// <see cref="Kept"/>.</summary>
+    /// (the Gateway then falls back to the capture). Generated once per (area, seed) and kept while among the
+    /// <see cref="Kept"/> most recently asked for, or while a layout in use holds it. Lock-free unless it generates.</summary>
     public static Level? For(string areaId, uint seed)
     {
         if (!IsSupported(areaId)) return null;
-        if (Generated.TryGetValue((areaId, seed), out var known)) return known;
+        if (Known((areaId, seed), out var known)) return known;
         lock (Gate)
         {
-            if (Generated.TryGetValue((areaId, seed), out known)) return known;
-            var level = Generated[(areaId, seed)] = Generate(areaId, seed);
-            Order.Enqueue((areaId, seed));
-            while (Order.Count > Kept)
-            {
-                var old = Order.Dequeue();
-                Generated.TryRemove(old, out _);
-                Errors.TryRemove(old, out _);
-            }
+            if (Known((areaId, seed), out known)) return known;
+            var level = Generate(areaId, seed);
+            Generated[(areaId, seed)] = new(level);
+            if (level is not null) Live[(areaId, seed)] = new(level);
+            Trim((areaId, seed));
             return level;
         }
+    }
+
+    static bool Known((string Area, uint Seed) key, out Level? level)
+    {
+        if (Generated.TryGetValue(key, out var kept))
+        {
+            kept.UsedAt = Stopwatch.GetTimestamp();
+            level = kept.Level;
+            return true;
+        }
+        level = Live.TryGetValue(key, out var weak) && weak.TryGetTarget(out var live) ? live : null;
+        return level is not null;
+    }
+
+    // Under Gate: the kept levels beyond Kept go, older failed generations first, then the least recently used; never the
+    // one just generated (its callers ask again at once). A level in use stays reachable through Live. Live forgets the
+    // levels nobody holds any more.
+    static void Trim((string Area, uint Seed) newest)
+    {
+        while (Generated.Count > Kept)
+        {
+            var oldest = Generated.Where(e => e.Key != newest)
+                .OrderBy(e => e.Value.Level is null ? 0 : 1).ThenBy(e => e.Value.UsedAt).First().Key;
+            Generated.TryRemove(oldest, out _);
+            Errors.TryRemove(oldest, out _);
+        }
+        foreach (var (key, weak) in Live)
+            if (!weak.TryGetTarget(out _)) Live.TryRemove(key, out _);
     }
 
     /// <summary>The seed an instance of a supported area is played at: its own, unless the port cannot generate it (a
@@ -153,7 +191,10 @@ static class ServerLevels
     {
         if (_files is not null) return _files;
         var oodle = new NodeOodleDecoder("node", Path.GetFullPath(Path.Combine("Tools", "ooz", "ooz_worker.mjs")));
-        _fs = GameFileSystem.Open(Path.GetFullPath(Path.Combine("Client", "Content.ggpk")), oodle);
+        // A small bundle cache: a read whose chunks are all in the decompressed-chunk cache needs no bundle, and the
+        // default 1 GiB ceiling would be every Gateway's on a multi-stack machine (the perf benchmark's 46 areas filled
+        // 173 MB of it; Agents/docs/dev/performance.md).
+        _fs = GameFileSystem.Open(Path.GetFullPath(Path.Combine("Client", "Content.ggpk")), oodle, bundleCacheBytes: 128L << 20);
         return _files = new TerrainCache(Read);
     }
 

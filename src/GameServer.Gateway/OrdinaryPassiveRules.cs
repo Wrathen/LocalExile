@@ -118,7 +118,7 @@ sealed class OrdinaryPassiveRules(string folder = "data")
         using var characters = JsonDocument.Parse(File.ReadAllBytes(characterPath));
         byte[] classes = characters.RootElement.EnumerateArray()
             .Select(r => checked((byte)r.GetProperty("IntegerId").GetInt32())).ToArray();
-        using var stats = JsonDocument.Parse(File.ReadAllBytes(statsPath));
+        using var stats = GameTables.Open(statsPath);
         int grantStat = Array.FindIndex(stats.RootElement.EnumerateArray().ToArray(),
             r => r.GetProperty("Id").GetString() == "display_can_take_character_start_point");
         using var passives = JsonDocument.Parse(File.ReadAllBytes(passivePath));

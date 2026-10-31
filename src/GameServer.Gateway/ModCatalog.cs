@@ -117,7 +117,7 @@ sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeP
         var rows = new List<Mod>();
         if (!File.Exists(path) || !File.Exists(statsPath)) return (rows, [], []);
         List<(string Id, bool Local)> stats;
-        using (var s = JsonDocument.Parse(File.ReadAllBytes(statsPath)))
+        using (var s = GameTables.Open(statsPath))
             stats = [.. s.RootElement.EnumerateArray().Select(r => (r.GetProperty("Id").GetString() ?? "", r.GetProperty("IsLocal").GetBoolean()))];
         List<string> modTypes = [];
         if (File.Exists(modTypePath))
@@ -130,7 +130,7 @@ sealed class ModCatalog(string folder = "data", bool ruthless = false, ModRangeP
         List<(string, int)> Weights(JsonElement r, string keys, string values) =>
             [.. r.GetProperty(keys).EnumerateArray().Zip(r.GetProperty(values).EnumerateArray(),
                 (k, v) => (k.GetInt32() < tags.Count ? tags[k.GetInt32()] : $"#{k.GetInt32()}", v.GetInt32()))];
-        using var d = JsonDocument.Parse(File.ReadAllBytes(path));
+        using var d = GameTables.Open(path);
         foreach (var r in d.RootElement.EnumerateArray())
         {
             bool alternate = ruthless && r.TryGetProperty("HasHardmodeStatValues", out var hardmode) && hardmode.GetBoolean();

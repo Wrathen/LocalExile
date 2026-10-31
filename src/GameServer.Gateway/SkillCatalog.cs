@@ -42,7 +42,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
         var result = new Dictionary<int, int[]>();
         string path = Path.Combine(folder, "tables", "GrantedEffects.json");
         if (!File.Exists(path)) return result;
-        using var d = JsonDocument.Parse(File.ReadAllBytes(path));
+        using var d = GameTables.Open(path);
         int row = 0;
         foreach (var r in d.RootElement.EnumerateArray())
         {
@@ -283,7 +283,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     {
         string PathOf(string name) => Path.Combine(folder, "tables", name + ".json");
         if (!File.Exists(PathOf("GrantedEffects")) || !File.Exists(PathOf("ActiveSkills")) || !File.Exists(PathOf("ActionTypes"))) return [];
-        using var effects = JsonDocument.Parse(File.ReadAllBytes(PathOf("GrantedEffects")));
+        using var effects = GameTables.Open(PathOf("GrantedEffects"));
         using var active = JsonDocument.Parse(File.ReadAllBytes(PathOf("ActiveSkills")));
         using var actions = JsonDocument.Parse(File.ReadAllBytes(PathOf("ActionTypes")));
         var result = new Dictionary<int, ushort>();
@@ -415,7 +415,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
             r.TryGetProperty("WeaponRestriction_ItemClassesKeys", out var k) && k.ValueKind == JsonValueKind.Array
                 ? k.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.Number).Select(v => v.GetInt32()).ToFrozenSet()
                 : FrozenSet<int>.Empty).ToList();
-        using var effects = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
+        using var effects = GameTables.Open(TablePath("GrantedEffects"));
         var result = new Dictionary<int, IReadOnlySet<int>>();
         foreach (var (r, i) in effects.RootElement.EnumerateArray().Select((r, i) => (r, i)))
             if (r.TryGetProperty("ActiveSkill", out var a) && a.ValueKind == JsonValueKind.Number
@@ -434,44 +434,81 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     /// <summary>The native Brand skill type, independently of display name or gem tags.</summary>
     public bool IsBrand(int effectRow) => _brandEffects.Value.Contains(effectRow);
 
-    private readonly Lazy<HashSet<int>> _instantEffects = new(() => EffectsOfType(folder, "Instant"));
-    private readonly Lazy<HashSet<int>> _movementEffects = new(() => EffectsOfType(folder, "Movement"));
-    private readonly Lazy<HashSet<int>> _attackEffects = new(() => EffectsOfType(folder, "Attack"));
-    private readonly Lazy<HashSet<int>> _meleeEffects = new(() => EffectsOfType(folder, "Melee"));
-    private readonly Lazy<HashSet<int>> _spellEffects = new(() => EffectsOfType(folder, "Spell"));
-    private readonly Lazy<HashSet<int>> _projectileEffects = new(() => EffectsOfType(folder, "Projectile"));
-    private readonly Lazy<HashSet<int>> _warcryEffects = new(() => EffectsOfType(folder, "Warcry"));
-    private readonly Lazy<HashSet<int>> _auraEffects = new(() => EffectsOfType(folder, "Aura"));
-    private readonly Lazy<HashSet<int>> _curseEffects = new(() => EffectsOfType(folder, "AppliesCurse"));
-    private readonly Lazy<HashSet<int>> _addedAuraEffects = new(() => EffectsOfType(folder, "Aura", added: true));
-    private readonly Lazy<HashSet<int>> _brandEffects = new(() => EffectsOfType(folder, "Brand"));
+    // The effects of one ActiveSkillType each: ActiveSkillType, ActiveSkills and GrantedEffects are parsed once for all
+    // of them (each set used to parse the three tables again: ~100 MB of JSON per catalogue at the first spawn).
+    private readonly SkillTypeSets _skillTypes = new(folder);
+    private Lazy<HashSet<int>> _instantEffects => _skillTypes.Instant;
+    private Lazy<HashSet<int>> _movementEffects => _skillTypes.Movement;
+    private Lazy<HashSet<int>> _attackEffects => _skillTypes.Attack;
+    private Lazy<HashSet<int>> _meleeEffects => _skillTypes.Melee;
+    private Lazy<HashSet<int>> _spellEffects => _skillTypes.Spell;
+    private Lazy<HashSet<int>> _projectileEffects => _skillTypes.Projectile;
+    private Lazy<HashSet<int>> _warcryEffects => _skillTypes.Warcry;
+    private Lazy<HashSet<int>> _auraEffects => _skillTypes.Aura;
+    private Lazy<HashSet<int>> _curseEffects => _skillTypes.Curse;
+    private Lazy<HashSet<int>> _addedAuraEffects => _skillTypes.AddedAura;
+    private Lazy<HashSet<int>> _brandEffects => _skillTypes.Brand;
 
-    /// <summary>The GrantedEffects rows whose ActiveSkill has the ActiveSkillType of this Id.</summary>
-    static HashSet<int> EffectsOfType(string folder, string typeId, bool added = false)
+    /// <summary>The GrantedEffects rows whose active skill has an ActiveSkillType (or, <c>added</c>, that add the type to
+    /// the skill they support), from one read of the three tables. Each set is computed on first use.</summary>
+    sealed class SkillTypeSets
     {
-        string TablePath(string name) => Path.Combine(folder, "tables", name + ".json");
-        if (!File.Exists(TablePath("GrantedEffects")) || !File.Exists(TablePath("ActiveSkills")) || !File.Exists(TablePath("ActiveSkillType"))) return [];
-        using var types = JsonDocument.Parse(File.ReadAllBytes(TablePath("ActiveSkillType")));
-        int instant = types.RootElement.EnumerateArray().Select((r, i) => (Id: r.GetProperty("Id").GetString(), i))
-            .FirstOrDefault(t => t.Id == typeId, (null, -1)).i;
-        if (instant < 0) return [];
-        if (added)
+        sealed record Rows(string?[] TypeIds, int[][] ActiveSkillTypes, int?[] EffectSkills, int[][] AddedTypes);
+
+        readonly Lazy<Rows?> _rows;
+
+        public SkillTypeSets(string folder)
         {
-            using var granted = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
-            return [.. granted.RootElement.EnumerateArray().Select((r, i) => (r, i))
-                .Where(e => e.r.TryGetProperty("AddedActiveSkillTypes", out var a) && a.ValueKind == JsonValueKind.Array
-                    && a.EnumerateArray().Any(v => v.ValueKind == JsonValueKind.Number && v.GetInt32() == instant))
-                .Select(e => e.i)];
+            _rows = new(() => Load(folder));
+            Instant = Of("Instant"); Movement = Of("Movement"); Attack = Of("Attack"); Melee = Of("Melee");
+            Spell = Of("Spell"); Projectile = Of("Projectile"); Warcry = Of("Warcry"); Aura = Of("Aura");
+            Curse = Of("AppliesCurse"); AddedAura = Of("Aura", added: true); Brand = Of("Brand");
         }
-        using var active = JsonDocument.Parse(File.ReadAllBytes(TablePath("ActiveSkills")));
-        var instantSkills = active.RootElement.EnumerateArray().Select((r, i) => (r, i))
-            .Where(a => a.r.TryGetProperty("ActiveSkillTypes", out var t) && t.ValueKind == JsonValueKind.Array
-                && t.EnumerateArray().Any(v => v.ValueKind == JsonValueKind.Number && v.GetInt32() == instant))
-            .Select(a => a.i).ToHashSet();
-        using var effects = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
-        return [.. effects.RootElement.EnumerateArray().Select((r, i) => (r, i))
-            .Where(e => e.r.TryGetProperty("ActiveSkill", out var a) && a.ValueKind == JsonValueKind.Number && instantSkills.Contains(a.GetInt32()))
-            .Select(e => e.i)];
+
+        public Lazy<HashSet<int>> Instant { get; }
+        public Lazy<HashSet<int>> Movement { get; }
+        public Lazy<HashSet<int>> Attack { get; }
+        public Lazy<HashSet<int>> Melee { get; }
+        public Lazy<HashSet<int>> Spell { get; }
+        public Lazy<HashSet<int>> Projectile { get; }
+        public Lazy<HashSet<int>> Warcry { get; }
+        public Lazy<HashSet<int>> Aura { get; }
+        public Lazy<HashSet<int>> Curse { get; }
+        public Lazy<HashSet<int>> AddedAura { get; }
+        public Lazy<HashSet<int>> Brand { get; }
+
+        Lazy<HashSet<int>> Of(string typeId, bool added = false) => new(() => Effects(_rows.Value, typeId, added));
+
+        static HashSet<int> Effects(Rows? rows, string typeId, bool added)
+        {
+            if (rows is null) return [];
+            int type = Array.IndexOf(rows.TypeIds, typeId);
+            if (type < 0) return [];
+            if (added)
+                return [.. Enumerable.Range(0, rows.AddedTypes.Length).Where(i => rows.AddedTypes[i].Contains(type))];
+            var skills = Enumerable.Range(0, rows.ActiveSkillTypes.Length).Where(i => rows.ActiveSkillTypes[i].Contains(type)).ToHashSet();
+            return [.. Enumerable.Range(0, rows.EffectSkills.Length).Where(i => rows.EffectSkills[i] is int skill && skills.Contains(skill))];
+        }
+
+        static Rows? Load(string folder)
+        {
+            string TablePath(string name) => Path.Combine(folder, "tables", name + ".json");
+            if (!File.Exists(TablePath("GrantedEffects")) || !File.Exists(TablePath("ActiveSkills")) || !File.Exists(TablePath("ActiveSkillType"))) return null;
+            static int[] Ints(JsonElement row, string name) => row.TryGetProperty(name, out var a) && a.ValueKind == JsonValueKind.Array
+                ? [.. a.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.Number).Select(v => v.GetInt32())] : [];
+            // One document at a time, so their pooled buffers are reused.
+            string?[] typeIds;
+            using (var types = JsonDocument.Parse(File.ReadAllBytes(TablePath("ActiveSkillType"))))
+                typeIds = [.. types.RootElement.EnumerateArray().Select(r => r.GetProperty("Id").GetString())];
+            int[][] activeTypes;
+            using (var active = JsonDocument.Parse(File.ReadAllBytes(TablePath("ActiveSkills"))))
+                activeTypes = [.. active.RootElement.EnumerateArray().Select(r => Ints(r, "ActiveSkillTypes"))];
+            using var effects = GameTables.Open(TablePath("GrantedEffects"));
+            return new(typeIds, activeTypes,
+                [.. effects.RootElement.EnumerateArray().Select(r =>
+                    r.TryGetProperty("ActiveSkill", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetInt32() : (int?)null)],
+                [.. effects.RootElement.EnumerateArray().Select(r => Ints(r, "AddedActiveSkillTypes"))]);
+        }
     }
 
     /// <summary>A weapon base's WeaponTypes row by its BaseItemTypes row: attack time (ms), physical damage, range.</summary>
@@ -707,7 +744,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
             .Where(a => a.r.TryGetProperty("Id", out var id) && id.GetString() is { } name
                 && name.StartsWith("monster_mortar", StringComparison.Ordinal))
             .Select(a => a.i).ToHashSet();
-        using var effects = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
+        using var effects = GameTables.Open(TablePath("GrantedEffects"));
         int row = -1;
         foreach (var e in effects.RootElement.EnumerateArray())
         {
@@ -1003,7 +1040,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
             string ge = Table("GrantedEffects"), gepl = Table("GrantedEffectsPerLevel"), gesspl = Table("GrantedEffectStatSetsPerLevel"),
                 gess = Table("GrantedEffectStatSets");
             if (!File.Exists(ge) || !File.Exists(gepl) || !File.Exists(gesspl)) return null;
-            using var g = JsonDocument.Parse(File.ReadAllBytes(ge));
+            using var g = GameTables.Open(ge);
             using var p = JsonDocument.Parse(File.ReadAllBytes(gepl));
             using var s = JsonDocument.Parse(File.ReadAllBytes(gesspl));
             static int Int(JsonElement r, string name) => r.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : -1;

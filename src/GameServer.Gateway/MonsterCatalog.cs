@@ -246,7 +246,7 @@ sealed class MonsterCatalog(string folder = "data")
         static int Column(JsonElement row, string name) =>
             row.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt32() : 0;
         var rows = new List<Variety>();
-        using (var doc = JsonDocument.Parse(File.ReadAllBytes(varieties)))
+        using (var doc = GameTables.Open(varieties))
         {
             foreach (var r in doc.RootElement.EnumerateArray())
             {

@@ -57,6 +57,7 @@ How to regenerate them: [re/tooling.md](re/tooling.md) §7.
 | [re/tooling.md](re/tooling.md) | Ghidra headless scripts, Python helpers, GGPK dump tool, Frida through REA, recipes |
 | [re/011-level-generation.md](re/011-level-generation.md) | the client's level generator: stages, RNG, topology pick, tile hash, generation traces; the server port in progress |
 | [dev/debugging.md](dev/debugging.md) | log timestamps and archives, error stack traces, the packet history and dumps, `Game_TRACE`, client crashes, `bugreport.ps1` |
+| [dev/performance.md](dev/performance.md) | measuring a stack's startup, memory, area creation and busy-instance CPU (`scripts/perf/startup.ps1`, `PerfBenchmarkTests`), results and the remaining costs |
 | [dev/editable-game-data.md](dev/editable-game-data.md) | what game data can become editable in SQLite, the client-compatibility boundary, the snapshot/cache design and the phased plan |
 | [dev/modding.md](dev/modding.md) | mods in `Mods/Binaries/<id>/`: `mod.json`, writing one in `Mods/Source/`, the hooks, reloading, limits |
 | [dev/live-testing.md](dev/live-testing.md) | the older live-testing notes (GettingStarted supersedes them) |

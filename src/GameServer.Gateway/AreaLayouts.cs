@@ -18,6 +18,10 @@ sealed record AreaLayout(ushort Hash, string Id, int GridW, int GridH, int Spawn
     /// (<see cref="ServerLevels"/>); null for a capture.</summary>
     public short[]? CellHeights { get; init; }
 
+    /// <summary>The level the Gateway generated this layout from (<see cref="ServerLevels"/>); holding it keeps it
+    /// available to the projectile and height lookups for as long as a connection plays the layout.</summary>
+    public ServerLevels.Level? Level { get; init; }
+
     /// <summary>Whether the Gateway generated this layout from the seed (<see cref="ServerLevels"/>).</summary>
     public bool ServerGenerated => CellHeights is not null;
 
@@ -117,7 +121,7 @@ static class AreaLayouts
     {
         // An area the port reproduces is generated here from the seed; any other needs the client's capture.
         if (ServerLevels.For(id, seed) is { } generated)
-            return WithCells(hash, id, seed, generated.Walk, generated.Width, generated.Height) with { CellHeights = generated.Heights };
+            return WithCells(hash, id, seed, generated.Walk, generated.Width, generated.Height) with { CellHeights = generated.Heights, Level = generated };
         byte[]? cells = LoadCells(id, seed, out int w, out int h);
         return WithCells(hash, id, seed, cells, w, h);
     }
@@ -255,6 +259,8 @@ static class AreaLayouts
     static Func<int, int, bool> Walkable(byte[] cells, int w, int h) =>
         (x, y) => x >= 0 && y >= 0 && x < w && y < h && cells[y * w + x] >= 2;
 
+    static readonly (int Dx, int Dy)[] Neighbours = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+
     /// <summary>The walkable cell farthest from any blocked cell (multi-source BFS from blocked cells).</summary>
     static (int X, int Y) DeepestCell(byte[] cells, int w, int h)
     {
@@ -265,7 +271,7 @@ static class AreaLayouts
         while (q.Count > 0)
         {
             int i = q.Dequeue(), x = i % w, y = i / w;
-            foreach (var (dx, dy) in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+            foreach (var (dx, dy) in Neighbours)
             {
                 int nx = x + dx, ny = y + dy;
                 if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;

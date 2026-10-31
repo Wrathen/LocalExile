@@ -389,7 +389,7 @@ sealed class MonsterModCatalog(ModCatalog mods, string folder = "data")
         var result = new Dictionary<int, IReadOnlySet<string>>();
         if (!File.Exists(path)) return result;
         var tags = LoadTagNames(folder);
-        using var d = JsonDocument.Parse(File.ReadAllBytes(path));
+        using var d = GameTables.Open(path);
         int row = 0;
         foreach (var r in d.RootElement.EnumerateArray())
             result[row++] = r.GetProperty("TagsKeys").EnumerateArray().Select(k => k.GetInt32())

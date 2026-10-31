@@ -10,7 +10,7 @@ sealed class StatCatalog(string folder = "data")
     {
         string path = Path.Combine(folder, "tables", "Stats.json");
         if (!File.Exists(path)) return [];
-        using var d = JsonDocument.Parse(File.ReadAllBytes(path));
+        using var d = GameTables.Open(path);
         return [.. d.RootElement.EnumerateArray().Select(r => r.GetProperty("Id").GetString() ?? "")];
     });
 

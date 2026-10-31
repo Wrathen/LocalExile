@@ -15,6 +15,9 @@ static class MonsterSurround
     public readonly record struct Asker(uint Id, int X, int Y, int Size, (int X, int Y)? Last,
         double Reach = double.PositiveInfinity, bool Ranged = false);
 
+    // Assign's refused cells, reused by each thread's next assignment (it is not reentrant).
+    [ThreadStatic] static HashSet<(int X, int Y, int Size)>? t_refused;
+
     /// <summary>How many rings out a monster may be placed before it simply aims at the player.</summary>
     const int Rings = 6;
     // Radii come from catalog body sizes/reaches. Reuse the trigonometry across chasers and decisions.
@@ -41,19 +44,23 @@ static class MonsterSurround
             return distance != 0 ? distance : a.Id.CompareTo(b.Id);
         });
         var result = new Dictionary<uint, (int X, int Y)>(ordered.Length);
+        // Cells found not free for a body size stay so for this whole assignment: the ground and the player do not
+        // change, and reservations are only added. The chasers' searches overlap, so each is checked once.
+        var refused = t_refused ??= [];
+        refused.Clear();
         foreach (var a in ordered)
         {
             // Keep the last slot while it is still free and still on the innermost ring around the player; a waiting slot
             // farther out is chosen again every time, so it moves in when a gap opens.
             (int X, int Y)? slot = a.Last is { } last && OnRing(last, player, a)
-                && Free(last, player, a.Size, taken, walkable) ? last : null;
+                && Free(last, player, a.Size, taken, walkable, refused) ? last : null;
             if (slot is null)
             {
                 // A last slot still on its ring but taken: look beside it. Once the player has moved, from the monster.
                 double bearing = a.Last is { } l && (l.X, l.Y) != player && OnRing(l, player, a)
                     ? Math.Atan2(l.Y - player.Y, l.X - player.X)
                     : Math.Atan2(a.Y - player.Y, a.X - player.X);
-                slot = Find(player, a, bearing, taken, walkable);
+                slot = Find(player, a, bearing, taken, walkable, refused);
             }
             if (slot is not { } s) continue;
             result[a.Id] = s;
@@ -63,9 +70,14 @@ static class MonsterSurround
     }
 
     static bool Free((int X, int Y) cell, (int X, int Y) player, int size, BlockerSet taken,
-        Func<int, int, int, bool> walkable) =>
-        Math.Max(Math.Abs(cell.X - player.X), Math.Abs(cell.Y - player.Y)) >= size + LivingCollision.PlayerSize + 1
-        && !taken.OverlapsFootprint(cell.X, cell.Y, size + 1) && walkable(cell.X, cell.Y, size);
+        Func<int, int, int, bool> walkable, HashSet<(int X, int Y, int Size)> refused)
+    {
+        if (refused.Contains((cell.X, cell.Y, size))) return false;
+        bool free = Math.Max(Math.Abs(cell.X - player.X), Math.Abs(cell.Y - player.Y)) >= size + LivingCollision.PlayerSize + 1
+            && !taken.OverlapsFootprint(cell.X, cell.Y, size + 1) && walkable(cell.X, cell.Y, size);
+        if (!free) refused.Add((cell.X, cell.Y, size));
+        return free;
+    }
 
     static double InnerRadius(Asker a) => Math.Max(a.Size + LivingCollision.PlayerSize + 1,
         Math.Min(ContactRadius(a.Size), a.Reach));
@@ -82,7 +94,7 @@ static class MonsterSurround
     }
 
     static (int X, int Y)? Find((int X, int Y) player, Asker a, double bearing, BlockerSet taken,
-        Func<int, int, int, bool> walkable)
+        Func<int, int, int, bool> walkable, HashSet<(int X, int Y, int Size)> refused)
     {
         int spacing = 2 * a.Size + 2;
         var (bearingSin, bearingCos) = Math.SinCos(bearing);
@@ -111,7 +123,7 @@ static class MonsterSurround
                     var cell = ((int)Math.Round(player.X + radius * (bearingCos * cos - bearingSin * sin)),
                         (int)Math.Round(player.Y + radius * (bearingSin * cos + bearingCos * sin)));
                     if (ring == 0 && Distance2(cell.Item1 - player.X, cell.Item2 - player.Y) > a.Reach * a.Reach) continue;
-                    if (Free(cell, player, a.Size, taken, walkable)) return cell;
+                    if (Free(cell, player, a.Size, taken, walkable, refused)) return cell;
                 }
         }
         return null;
