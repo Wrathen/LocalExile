@@ -277,8 +277,11 @@ partial class Program
         var own = skillId == 0 ? new Dictionary<uint, int>() : SupportedSkill(conn, skillId).Stats;
         int speed = CastSpeedPct(CharacterPlayerStats(conn));
         if (Stats.Key("base_cast_speed_+%") is uint k) speed += own.GetValueOrDefault(k);
-        return SpellCastTiming.ForSkill(SkillsFor(conn), effect, speed)?.DurationMilliseconds is int duration
-            ? (int)Math.Min(int.MaxValue, Math.Ceiling(duration / PlayerActionFactor(conn))) : null;
+        if (SpellCastTiming.ForSkill(SkillsFor(conn), effect, speed)?.DurationMilliseconds is not int duration) return null;
+        // A new action starts at most once per server frame (30/s); channelling repeats are exempt and use their own
+        // interval. Keep the fractional tick and round the final wait up to whole milliseconds.
+        double seconds = Math.Max(TickSeconds, duration / 1000.0 / PlayerActionFactor(conn));
+        return (int)Math.Min(int.MaxValue, Math.Ceiling(seconds * 1000));
     }
 
     // cast_speed_+% is the total (PanelStats: base_cast_speed_+% and attack_and_cast_speed_+% are already in it).

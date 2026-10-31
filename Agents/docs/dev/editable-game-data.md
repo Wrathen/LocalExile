@@ -86,6 +86,7 @@ tables. The server can only create items the client can resolve by an existing h
 | `gold_drop_multiplier` | 1 | multiplier on the mode's gold amount; the Ruthless 0.25 base still applies |
 | `gold_drop_chance_multiplier` | 1 | multiplier on the per-rarity gold drop chance |
 | `gold_auto_loot_radius` | 15 | cells within which gold is picked up without a click |
+| `projectile_maximum_range_cells` | 150 | one projectile movement instance's maximum flight (150 cells = 15 m); fork/chain/split start a fresh instance |
 | `drop_multiplier_currency`, `drop_multiplier_equipment`, `drop_multiplier_flasks`, `drop_multiplier_gems` | 1 | category weights in the ordinary drop roll |
 | `drop_multiplier_maps` | 1 | generic map drop chance |
 | `drop_multiplier_unique_rarity` | 1 | equipment magic/rare-roll multiplier; unique item drops themselves are not in the drop table yet |
@@ -410,7 +411,7 @@ warms the reference data the admin panel needs (mod list, base list, tags, exist
 catalogue, not a query per item. The first connection then sees the same snapshot.
 
 On a fresh database the same open also seeds the overlay: `GameDataWeights.Seed` writes the 1,527 unique weights,
-`GameDataCatalog.Reload` writes the catalogue rows, `SystemSettings.Reload` the 45 settings, and `GameDataReference.Seed`
+`GameDataCatalog.Reload` writes the catalogue rows, `SystemSettings.Reload` the 46 settings, and `GameDataReference.Seed`
 the `stats`/`mods`/`mod_stats` tables from `data/tables/Stats.json` and `Mods.json`. The Gateway logs the reference
 counts every start
 (`[gateway] game data reference: 23346 stat(s), 40355 mod(s), 60695 default mod stat row(s)`); `empty` means the
@@ -510,7 +511,7 @@ Live check 2026-10-30 (Gateway and real client):
 - Changing the `Crown of Eyes` row's `ItemLevel` from 86 to 50 in `catalog_entries`, `/game_data reload`, and
   `/item Crown of Eyes` produced an ilvl 50 item. Restoring 86 and reloading published revision 3 with the original
   values.
-- `system_settings` seeded 45 rows: 21 socket caps (wand 3, body 6, helmet/gloves/boots 4, shield 3, belt 0, two-handed 6),
+- `system_settings` seeded 46 rows: 21 socket caps (wand 3, body 6, helmet/gloves/boots 4, shield 3, belt 0, two-handed 6),
   `passive_points_per_level` 1, the gold/drop/pack/experience/max-level/limit/grace defaults above. `/game_data settings`
   listed them; the first upgrade added the new keys without overwriting existing rows.
 - Set `socket_max_wand` 6, created a Kinetic Wand, and `/sockets RRGBBB` gave it six sockets; set the key back to 3 and

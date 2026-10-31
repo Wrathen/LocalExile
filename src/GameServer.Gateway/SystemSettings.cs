@@ -39,6 +39,9 @@ sealed class SystemSettings
         ["gold_drop_multiplier"] = 1,
         ["gold_drop_chance_multiplier"] = 1,
         ["gold_auto_loot_radius"] = 15,
+        // The client caps one projectile movement instance at 150 units = 15 m (10 units per metre). Cells use the
+        // same scale: 150 cells = 15 m. Fork, chain and split start a new instance with a fresh budget.
+        ["projectile_maximum_range_cells"] = 150,
         ["drop_multiplier_currency"] = 1,
         ["drop_multiplier_equipment"] = 1,
         ["drop_multiplier_flasks"] = 1,
@@ -113,6 +116,10 @@ sealed class SystemSettings
     public double GoldChanceMultiplier => Math.Clamp(Get("gold_drop_chance_multiplier"), 0, 100);
     public double GoldAutoLootRadius => Math.Clamp(Get("gold_auto_loot_radius"), 0, 100);
 
+    /// <summary>One projectile movement instance's maximum flight, in cells (10 cells = 1 m): 150 = the client's 15 m
+    /// cap. Fork, chain and split start a new movement instance with a fresh budget.</summary>
+    public int ProjectileMaximumRangeCells => Math.Clamp(GetInt("projectile_maximum_range_cells"), 1, 10_000);
+
     public double DropMultiplier(string category) => category switch
     {
         "currency" => Math.Max(0, Get("drop_multiplier_currency")),
@@ -184,6 +191,11 @@ sealed class SystemSettings
         {
             if (value < 1 || value > 100 || value != Math.Round(value))
                 error = "passive_points_per_level is an integer 1..100";
+        }
+        else if (key.Equals("projectile_maximum_range_cells", StringComparison.OrdinalIgnoreCase))
+        {
+            if (value < 1 || value > 10_000 || value != Math.Round(value))
+                error = "projectile_maximum_range_cells is an integer 1..10000 (cells; 10 cells = 1 m)";
         }
         else if (key.StartsWith("drop_multiplier_", StringComparison.OrdinalIgnoreCase))
         {

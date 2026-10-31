@@ -75,10 +75,11 @@ public sealed partial class ProjectileRuntime(IProjectileWorld world)
     {
         var p = new ProjectileEntity(++sequence, useId, emission, parent, use, position, direction, Now);
         projectiles.Add(p.Id, p);
-        if (p.Profile.Lobbed) p.Remaining = Math.Max(.001, Math.Min(p.Remaining, (use.Aim - position).Length));
         if (continuing is { } previous)
         {
-            p.Remaining = previous.Remaining; p.Distance = previous.Distance; p.ExpiresAt = previous.ExpiresAt;
+            // Fork and split start a new movement instance: the client caps each instance separately (150 units =
+            // 15 m), so the child gets a fresh range budget while the total travelled distance keeps accumulating.
+            p.Remaining = p.Profile.Range; p.Distance = previous.Distance; p.ExpiresAt = previous.ExpiresAt;
             p.Speed = previous.Speed; p.Form = previous.Form; p.DamageMultiplier = previous.DamageMultiplier;
             p.OutboundContacts = previous.OutboundContacts;
             p.Phase = previous.Phase; p.ReturnContacts = previous.ReturnContacts;
@@ -90,6 +91,8 @@ public sealed partial class ProjectileRuntime(IProjectileWorld world)
         {
             p.Form = 1; p.Speed *= splitForm.SpeedMultiplier; p.Pierce = splitForm.Pierce;
         }
+        // A lobbed child still lands at the use's aim, never past it.
+        if (p.Profile.Lobbed) p.Remaining = Math.Max(.001, Math.Min(p.Remaining, (use.Aim - position).Length));
         Publish(ProjectileEventKind.Spawn, p);
         StartStages(p);
         return p;
@@ -291,6 +294,8 @@ public sealed partial class ProjectileRuntime(IProjectileWorld world)
         if (!profile.CannotChain && p.Chain > 0 && Nearby(p, actors).FirstOrDefault() is { } next)
         {
             p.Chain--; p.Direction = (next.Position(Now) - p.Position).Unit;
+            // A chain jump starts a new movement instance, so its 15 m cap is fresh; Distance stays total for Far Shot.
+            p.Remaining = p.Profile.Range;
             Publish(ProjectileEventKind.Redirect, p);
             return true;
         }

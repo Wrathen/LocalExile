@@ -101,6 +101,28 @@ are not established. Phase-specific hit rules, contact caps, speed and terrain p
 `OutboundHitLimit` is an independent cap on actor attempts while traveling to the endpoint; finite pierce
 must use `Pierce`, never that cap.
 
+## Range and action speed
+
+A projectile movement instance is capped at 150 client units = 15 m (10 units per metre, the same scale as the
+Gateway's cells). `ProjectileProfile.Range` now defaults to 150; the Gateway reads
+`system_settings.projectile_maximum_range_cells` for every new profile, so an admin can shorten or lengthen the
+baseline without a rebuild. `projectile_distance_override` sets an exact distance from the client tables, and
+`projectile_maximum_range_override` (a skill/support stat in the same units, e.g. 48 = 4.8 m) caps either value. The
+3.29.3b player tables do not currently assign that stat, so it is a safety net for future skill and support rows.
+
+Fork, chain and split start a **new movement instance** at the continuation point, so each leg gets a fresh range
+budget and the total path can exceed 15 m; `ProjectileEntity.Distance` keeps accumulating for Far Shot and the
+flight arc. The return leg keeps the measured 150-cell overshoot past the captured caster rather than taking a
+plain fresh budget.
+
+Action speed is not a projectile input. It changes attack, cast and movement pacing, while projectile speed only
+changes the time to the endpoint (and, for limited-duration projectiles, how far they get before expiring, up to
+the same cap). An action-speed theory of longer projectiles is therefore not supported by the client rules: the
+observable "beyond 15 m" cases are continuation legs, not faster actions. The Gateway composes `action_speed_-%`
+additively with chill/freeze, multiplies the final attack/cast/movement/stun-recovery paces, and limits new actions to
+one per server frame while exempting channelling repeats. Tailwind, Harbinger, Temporal Chains, trap/mine/warcry/totem
+timings and monster floors remain [#246](https://github.com/LocalExile/LocalExile/issues/246).
+
 ## Skill definitions and presentation
 
 `ProjectileSkillParameters` owns profile resolution and optional native panel-stat projection.

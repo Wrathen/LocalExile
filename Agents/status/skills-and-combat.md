@@ -350,9 +350,11 @@ Part of [Status](../Status.md); what to build next in this area is in
   Docs: [11](../docs/protocol/11-skills.md) §12.
 - Movement speed: the passive `base_movement_velocity_+%` is summed into `Pools`, sent as the client's
   `movement_velocity_+%` and used by the server's walk copy (37 × (1 + pct / 100) cells/s);
-  applied on login, level, passive and area changes; `/set_speed` adds its percentage on top;
-  only unconditional passive increases are modelled (no action speed, more multipliers, gear/buff movement or the 128
-  cap yet).
+  applied on login, level, passive and area changes; `/set_speed` adds its percentage on top.
+  `action_speed_-%` from raw sources and dev overrides is composed additively with chill/freeze and multiplied once
+  into movement, attack, cast and stun-recovery pacing. New actions are limited to one per frame (30/s, `TickSeconds`);
+  channel repeats bypass that cap. Conditional/more multipliers, gear/buff movement, Tailwind/Harbinger/Temporal Chains
+  sources, trap/mine/warcry/totem timings, monster floors and the 128 cap remain open (#246).
   Code: `CharacterStats.cs`, Gateway (`ApplyMovementSpeed`).
   Docs: [07](../docs/protocol/07-latency-visibility-movement.md) §3.
 - Block / Spell Block: passives' `additional_block_%` and `base_spell_block_%` are summed and capped at 75% / 90% (PoB
@@ -795,7 +797,11 @@ and can require explicit recipes.
   Return opens another hit-admission phase and reads the shared returning-damage multiplier. Partial return chance,
   return speed, contact budgets, overshoot and terrain behavior are configurable through skill definitions.
   Boolean fork sources grant one generation, and raw bow always-pierce sources bind to the same common profile.
-  Return retains remaining continuation counts and the original lifetime; return pierce-all requires its own stat.
+  One movement instance is capped at 150 cells (15 m) through `projectile_maximum_range_cells`; fork, chain and split
+  start a new instance with a fresh budget, so total travel can exceed 15 m. Return retains remaining continuation
+  counts and the original lifetime; return pierce-all requires its own stat.
+  Action speed does not change projectile range: projectile speed only shortens the flight, and `action_speed_-%` is
+  composed additively with chill/freeze for attack, cast and movement pacing; Tailwind/Harbinger sources remain #246.
   Direct and area snapshots keep area increases/supports scoped to their damage stages.
   Area effects scale to the committed radius when the selected art exports a native radius; unknown art stays unscaled.
   Terrain-blocked area centers are omitted without resampling or reserving time; surviving areas keep consecutive intervals.
