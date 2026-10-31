@@ -63,8 +63,12 @@ This branch ports their completed ordinary-mode calculations; fresh build/test r
 remaining native checks are recorded in [the port record](../docs/dev/issue75-port.md).
 
 - **Known:** client stat key = Stats.dat row + 1 ([11](../docs/protocol/11-skills.md) §8); `/set_stat` takes names.
-  The server must send final values (the client derives none): the attack's are computed in
-  `SkillCatalog.Unarmed.Stats`.
+  The server publishes its authoritative final values; the attack's are computed in `SkillCatalog.Unarmed.Stats`.
+  The client has derived-stat evaluators, but its network getter honors explicit overrides, including zero.
+  Omitted keys read type stats; native update transactions can publish derived outputs there.
+  Ordinary network Actor/skill providers and same-key update/notification behavior are statically bound.
+  Supplying a raw network input does not establish native recomputation of omitted derived outputs.
+  See [client damage research](../docs/re/client-damage-calculation.md); do not rely on automatic raw-stat derivation.
   Mana per complete group of final Strength now has native raw-source/gear controls and automated pool coverage.
   Raw-source reservation refresh and clamping have decrypted wire coverage; recheck active auras natively.
   See [Status](../status/skills-and-combat.md) and [11](../docs/protocol/11-skills.md) section 4.
@@ -294,6 +298,159 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
 - **Done when:** the timer counts down and protection ends on movement, actions or expiry.
 
 ### Damage model (foundation done, deeper defence next)
+
+- **Client damage research:** recover Hit and DoT calculations before proposing further server mechanics.
+  Network Actor/skill input freshness and the distinct native transaction/startup boundary are established.
+  Typed routing, cap/overflow boundaries, mode-dependent ticks and absolute assignment have static evidence.
+  Outgoing RF parameters and 14408/8198/5981 formulas are bound separately from incoming base rates.
+  Resolve source instances into base rates and actual publication eligibility.
+  Reuse [bleeding policy inputs](../docs/re/client-bleeding-policy-inputs.md): conditional Crimson Dance,
+  replacement stack limit, minion-suppressed movement override and exerted aggravation chance are numerical inputs.
+  Find an actual instance-selection/application consumer; the finite registration graph has no declared downstream
+  consumer for the three policy outputs and does not cover indirect/inlined reads.
+  Reuse [native DoT queue composition](../docs/re/client-dot-native-composition.md): 105 outputs now compose through
+  original rank/dirty/dispatch instructions. Supplied eligibility/cache and local caps do not close instance publication
+  or prove an official global cap; continue from actual source/target records rather than restaging these formulas.
+  Reuse [the native getter-to-pool continuation](../docs/re/client-native-dot-pool-composition.md): record lookup and
+  numerical loss now compose under supplied native provider binding. Actual actor selection and source publication
+  remain open; avoid recreating scalar rate adapters for this already verified numerical boundary.
+  Reuse versioned source-sampling/target-dynamic rules and native duration/faster compensation.
+  Reuse the complete six source-duration modifier equations, including conditional sums and ordered binary32 arithmetic;
+  do not rescan them as instance construction. Base-duration application and actual instance assignment remain open.
+  Reuse the six additional skill-duration numeric stages and their source input units; do not flatten their intermediate rounding.
+  Resolve actual 1192/3745/6188 override selection and instance assignment separately; the 6187/6188 UI literals are ClientStrings labels.
+  Existing owner-stat-to-clock subscriptions and source-rate expiry publication remain separate open edges.
+  Reuse recovered clock input transport/defaults and partial/replacement asymmetry; later recalculation stays open.
+  Reuse [the retained replacement composition](../docs/re/client-buff-replacement-composition.md): actual temporary
+  construction and field transfer preserve identity and some initialization inputs. Do not model it as reinsertion,
+  reapply the local speed floor, or assume clock changes withdraw the independent explicit loss-rate override.
+  Reuse [body-to-source attribution composition](../docs/re/client-buff-wire-source-composition.md): both retained
+  paths overwrite the transported source, including zero; partial/replacement eligibility and extra context differ.
+  Do not repeat this body/selector prefix or interpret it as strongest-instance selection, rate publication or final attribution.
+  Empty Id2 for ignited/poison selects null in the audited startup catalogue, not an implicit default backend.
+  Follow concrete numerical observer/script leads; do not repeat that closed factory/registry question.
+  Reuse actual Buff observer payloads, lifecycle program storage/invocation and selected presence predicates.
+  Initial granted values share the recovery gate; reuse their byte-order and prefix-preserving storage contracts.
+  The attraction-shape observer has no-op gain/loss callbacks; do not reopen it as a numerical publisher.
+  These contracts do not yet identify a numerical subscriber; do not expand unrelated presentation code.
+  Reuse recovered outgoing ailment coefficients, faster/slower and critical-multiplier branches.
+  Reuse complete MH/OH/spell chance builders and the selected defender modifier composition.
+  Reuse all twelve named bleeding, 56 ignite and 72 poison rates with their category/critical builders.
+  Preserve implicit ignite tincture inputs, poison hand gates, wrapping totals and chaos-only always-output gates.
+  Reuse the complete fire self-rate 8180 equation; its primitive source publication remains a separate open edge.
+  Reuse complete physical/chaos self-rates 8179/8183, including transfer gates and the physical post-cap tail.
+  Reuse thirty typed spell component equations and four life-cost/weapon-as-spell contributor builders.
+  Reuse twelve final spell range equations, including ordered conversion terms and both special branch families.
+  Reuse twenty ordered attack ranges and four hand totals; base 6172 and added 5761 have separate scaling.
+  Preserve attack Lightning Purist minimum 0.5/maximum 1.25 and every chaos-path destination remainder.
+  Hand selection stays with the projectile research; formula closure does not close actual hit-to-pool loss.
+  Preserve the longest chaos-path remainder exception and signed integer total wrapping in comparisons.
+  Preserve wand half-splitting, hand-cast/type gates and distinct integer/float32 boundaries.
+  Fire intermediate-added reads active-Buff count outside declared dependencies; grants/refresh stay separate.
+  These callbacks consume supplied bleed/ignite/poison rates; primitive instance publication remains open.
+  Defender-conditional presence output 9189 groups 37 inputs; bind its numerical use before treating it as a resolver.
+  The native cache receiver ABI is established; do not promote untyped offset matches into actual consumers.
+  Reuse [native dependency ordering](../docs/re/client-stat-dependency-order.md) and changed-output propagation.
+  Preserve actual duplicate declarations; neither the ordered queue nor declared edges guarantee every runtime read.
+  IsApplyDamageFunctionStat selects guarded active-index maintenance for eleven on-hit side effects.
+  Reuse its typed metadata consumer; actual function execution and numerical hit application remain separate.
+  Three concrete Buff Stats subscribers update state/presentation; do not repeat them as clock-refresh candidates.
+  Reuse typed ailment permissions, target acquisition gates and ordinary/critical-only chance inputs.
+  Connect their real infliction consumers without assuming the chance sums perform a roll or create an instance.
+  Keep effective critical probability distinct from per-event trials, confirmation and defender critical modifiers.
+  Aura source metadata and versioned stack rules constrain authority without supplying the native rate publisher.
+  Concrete Fireball/Melee contact and avoidance decisions are bound separately from panel formulas and feedback.
+  Preserve Fireball base-versus-client factory scope and mode/kind filters; reuse parallel projectile research.
+  Reuse received-result control admission and mask/duration rewrites; selected critical feedback is not a roll.
+  Reuse [release/result/checkpoint composition](../docs/re/client-hit-checkpoint-resource-composition.md):
+  actual ProcessResult can consume independent resource assignments at its three nested checkpoints.
+  Preserve supplied ordered-mode/core/TLS boundaries; do not count checkpoints as frames or infer a hit amount.
+  Actual wire/core production stays with projectile research; pursue missing numerical damage connections here.
+  Bow/Wand specialization, equipment-to-setter updates and startup registry winners are bound.
+  Follow numerical consequences only where a concrete extension output requires them; do not expand all rendering.
+  Melee attachment/controller outputs and DefaultArrow's five component update targets are bound.
+  Selected Entity task factories, timers and secondary subscriptions are bound separately from component updates.
+  Reuse the selected action-start task's bound animation publisher/listener when a relevant trace reaches it.
+  Selected Buff lifecycle/quantity listeners resolve to Ruin count effects/audio; reuse that closed boundary.
+  Selected Sand Spitter source Actor callbacks and attachment outputs are bound separately.
+  Owner clocks initialize at insertion; existing-instance network updates overwrite duration/speed (default 1.0).
+  Separate any local owner-stat refresh claim from that established synchronization contract and damage rate.
+  Flame Wall secondary Buff has a concrete polling override restoring captured duration from owner stat 12588.
+  Reuse that selected path; general owner timing-stat subscriptions and existing-instance speed refresh remain open.
+  Reuse the actual Buff capacity and exhausted-duration contract for reason-4 Life loss.
+  Generic Buff contribution and source-rate publication remain open.
+  Reuse the separate Buff resource forecasts and first-eligible Life-callback source context; neither publishes rate.
+  Four Hit script subscribers have exact asymmetric contexts; trace their actual program consequences.
+  Reuse the selected Ferrofluid source/capture/named-task cleanup; its render-pack block is not numerical damage.
+  Life-to-Buffs guards and the decoded nonpositive-to-positive Life clear trigger are bound.
+  Trace other guard producers and source-rate consequences separately from that assignment branch.
+  GroundEffect kill/expiry now reaches the owner's conditional Buffs guard and a concrete lifecycle boundary.
+  Reuse its typed parent/token ownership; numerical source-to-target publication remains a separate open edge.
+  A named RF template declares a rate input; connect its actual instance and target to native publication.
+  Keep reference-damage defence estimates separate from accepted-hit mitigation and resource loss.
+  Reuse taken-as coefficients and armour applicability formulas; preserve their declared/actual dependency differences.
+    Reuse complete additional physical/elemental reduction and physical-ceiling input equations.
+    Preserve conditional qualifications, small ceilings and Strength of Blood's integer per-minute conversion.
+    Seven physical reads are absent from its declared vector; do not assume that vector is exhaustive.
+  PreloadFromStats and the selected Cold Snap backend have concrete resource/presentation outputs; do not reclassify
+  them as numerical publishers or expand their renderer without a separate numerical edge.
+  Reuse [penetration input equations](../docs/re/client-penetration-inputs.md); typed and hand totals already include
+  generic/highest-uncapped contributions. Preserve separate event-qualified inputs and undeclared condition reads.
+  Bind actual resistance selection, ignore/prohibition/penetration application instead of adding these totals twice.
+  Connect accepted contacts to numerical damage/critical/mitigation and pool receivers; these edges remain open.
+  Reuse [actual received-result/resource compositions](../docs/re/client-hit-result-resource-composition.md):
+  missing-action ProcessResult can succeed with no current/carry/reservation change in the supplied empty signals.
+  Current target ES and protects-Mana gate a sequence-derived control trial; resource assignment order matters.
+  Do not repeat the exhaustive u16 trial or treat its duration rewrite as numerical damage.
+  [Current Fireball Action lookup/callback/event cleanup](../docs/re/client-hit-action-present-composition.md) now
+  executes for supplied states. Do not repeat that empty-event path; ordinary construction/ingress, nonempty
+  numerical subscribers and the accepted-Hit numerical publisher remain separate next boundaries.
+  Reuse integer pool cost/sacrifice paths separately; trace payment-gate provenance before claiming client prepayment.
+  Their concrete numerical writes do not close accepted-Hit damage or DoT source publication.
+  Reuse [terminal Mana-refund arithmetic](../docs/re/client-terminal-mana-refunds.md), preserving FireMortar scope,
+  the separate reason-body ingress limit, fresh cost-stat reads and unsigned product widening.
+  Reuse the [maximum-stat subscriber and mode gate](../docs/re/client-pool-maximum-refresh.md): the two bound
+  client World implementations suppress proportional current adjustment, while Life alone clears carry.
+  Do not replace that contract with unconditional rescaling or confuse it with accepted-Hit resource loss.
+  Reuse [recharge-control and total-rate authority](../docs/re/client-recharge-rate-authority.md): active notifications
+  can cancel positive delay and suppress reset, while the pool step integrates its separately read total recovery rate.
+  Local timer expiry and the installed no-op active-state publication do not supply a missing DoT/Hit source publisher.
+  [Parsed Stats-to-Life composition](../docs/re/client-network-rate-composition.md) establishes received total-rate loss,
+  not source-instance publication. Preserve its extra full-step checkpoint and raw/final override distinction.
+  Reuse [initial Stats byte composition](../docs/re/client-initial-stats-rate.md): the original component reader,
+  compact primitives and subsequent Life loss are bound. Do not count duplicate pairs as additive DoT sources,
+  or treat this selected component body as a whole creation packet or an observed official rate publisher.
+  Reuse [the direct contribution map](../docs/re/client-native-contribution-callers.md): 103 retained calls in
+  13 owners have object/argument boundaries. Graph-owned remove-then-rebuild and type/action contributions are
+  separate from a concrete target-rate publisher; do not repeat this finite inventory as a new source search.
+  Reuse [owner/instance clock composition](../docs/re/client-buff-clock-authority.md): actual insertion and
+  selected owner notifications do not replace a received-instance refresh policy. Network speed zero bypasses
+  the initializer floor; definition force-one still governs ticks. Find the generic actual refresh publisher
+  without repeating these supplied-state controls or interpreting timer speed as DPS.
+  Reuse [Buff lifecycle/rate composition](../docs/re/client-buff-rate-independence.md): parsed removal and
+  eligible timer expiry do not clear the supplied explicit aggregate in the selected empty-lifecycle state.
+  Separate instance synchronization from rate withdrawal; recover the source publisher and its actual ordering,
+  without assuming empty subscribers, automatic rate clearing or a measured 33ms cadence.
+    [Critical Link export](../docs/re/client-critical-link-export.md) positively classifies one critical-input
+    consumer as three raw-value appends. Reuse its action/definition bindings; actual grant publication remains open.
+    The completed bounded immediate-key navigation is not a whole-program absence proof or Hit numerical closure.
+  Preserve [resource input read order](../docs/re/client-resource-read-order.md): saved recovery rates, later pool state,
+  sequential Life loss and preloaded ES loss differ. Reuse [the composed ordered resource route](../docs/re/client-resource-checkpoint-composition.md):
+  peer-established World checkpoints/parsed dispatch now execute the actual setter and later recovery arithmetic.
+  Wire parsing, queue production and official checkpoint choices remain separate; do not repeat the peer's World audit.
+  Reuse [AddBuff magnitude transport](../docs/re/client-buff-wire-magnitudes.md): the writer and reader share a recovery
+  gate but use different length sources. Keep their cardinalities aligned; do not place non-recovery DoT magnitude
+  in this omitted vector or confuse the separate counted vector with a proven DPS carrier.
+  Follow other event configurations beyond GEAL/native listeners; selected player/Sand Spitter files have no handler.
+  Extend the selected 22-source semantic catalogue through positive data/native links to numerical publication.
+  Preserve its exact inheritance, repeated fields, mode and component distinctions; six scripts are catalogued.
+  Prior keyword inventories are bounded searches, not full semantic audits; reuse projectile-side source findings.
+  Reuse the pinned PR #373 comparison: `0x1b4` is a skill-stat update; private capture claims need source records.
+  Bounded negative scans are not absence proofs.
+  Prioritize server-usable calculations and original C/S contracts; full rendering and live parity are not gates.
+  Track artifact hashes, exact anchors and evidence boundaries in the
+  [research workbench](../docs/re/client-damage-calculation.md#8-research-workbench-and-completion-criteria).
+  This is static research, not authorization for client execution or a server refactor.
 
 - **Done:** hits are per-type `DamagePacket`s; conversion follows physical, lightning, cold, fire, chaos, including
   chained conversion, the 100% cap and gain-as-extra.

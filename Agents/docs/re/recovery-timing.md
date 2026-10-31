@@ -43,6 +43,14 @@ especially immediately after damage; this change does not implement a full share
 
 ## Static evidence
 
+The broader [client damage investigation](client-damage-calculation.md) now audits continuous loss as well as recovery.
+The target executable SHA256, original instruction ranges and reproduction method are recorded there.
+Pool steps integrate per-minute rates as `rate / 60 * dt`; this is a rate unit, not a minute-reset budget.
+The network Stats getter honors explicit final-rate overrides before upstream fallback.
+DoT formula presence does not prove that a particular network actor executes the full derived-stat graph.
+Independent numerical hit prediction remains unresolved.
+The older runtime observations on this page remain LocalExile measurements and are not repeated by the static audit.
+
 | Address | Verified behavior |
 |---|---|
 | `0x141e678d0` | Life constructor: life/mana/ES pools at +0x178/+0x1c8/+0x210; native recovery keys 0x58e/0x58f/0x590 |

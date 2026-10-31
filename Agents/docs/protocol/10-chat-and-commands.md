@@ -132,6 +132,19 @@ compact uint n, n × (compact uint stat key, compact int value)
 - The Stats component has no 0x2ba (component update) handler: its vtable slot +0xa0 is a no-op. So 0x1b3 is the way to
   change stats.
 
+An explicit pair overrides the getter result, including when its value is zero.
+Only an absent key falls back to the upstream interface at provider `+0xe0`; a null upstream returns zero.
+`0x1421c2ad0` constructs the network wrapper at component `+0x20` through `0x1421c3700`.
+The wrapper table `0x14363bd90` has `0x1424cfa40` as its getter.
+Its upstream comes from the type object's shared pointer at `+0x10`.
+The type constructs native stats through `0x141e496c0`/`0x1424fb790`, installing getter `0x1424fc1e0`.
+That getter reads stored values; a separate native update transaction can evaluate and publish derived outputs.
+The constructor's flag-1 path skips the optional upstream subscription.
+The setter notifies the changed key through `0x1424cfd00`; full derived-cache invalidation is not established.
+Do not assume raw network inputs automatically recompute all omitted derived outputs.
+See [client damage research](../re/client-damage-calculation.md#3-stats-interfaces-explicit-overrides-and-upstream-calculations)
+for the separate raw/derived-stat layouts and Life's actual reader binding.
+
 ## 4. Commands (Gateway, `Program.Commands.cs` `Commands`)
 
 `/hit`, `/spellhit` and `/blockhit` are synthetic incoming enemy contacts for the

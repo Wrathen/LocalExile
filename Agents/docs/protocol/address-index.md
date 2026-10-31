@@ -126,13 +126,162 @@ G = global / static data.
 | `0x142f496a0` | G | static initializer table entry (Positioned) |
 | `0x1445bb240`, `0x1445bb6f0`, `0x1445bbe50`, `0x1445bbd60`, `0x1445bb760`, `0x1445bbd10`, `0x1445ba850`, `0x1445bc610` | G | component pools (Positioned, Stats, Pathfinding, Life, Animated, Player, Inventories, Actor) |
 
+### Client damage research
+
+The [native contribution caller map](../re/client-native-contribution-callers.md) rechecks 103 retained direct
+calls and separates graph-owned `+0x1d0`/`+0x190` receivers from target DoT publication.
+Graph producer `0x141eef620` removes category-1 source contributions before rebuilding; it is not a Buff publisher.
+
+Static evidence, formula boundaries and open tasks are in
+[client damage calculation](../re/client-damage-calculation.md).
+These are client addresses; their presence is not proof of official-server implementation.
+
+| Address | Kind | What |
+|---|---|---|
+| `0x140826070` / `0x140ad5f30` | Fn | Numerical skill average/DPS readers: context-zero provider, keys 2144/2044/679, formatted text assignment |
+| `0x1427fac60` / `0x1427fb8d0` / `0x142805120` / `0x142805d60` / `0x142807490` / `0x142808060` | Fn | [Complete source ailment-duration modifiers](../re/client-ailment-duration-inputs.md): ignite/bleed/poison additive/final equations, conditional gates and ordered binary32 factors; not actual instance assignment |
+| `0x142805d18..0x142805d28` / `0x14280782c..0x142807832` / `0x142807f40..0x142807f4d` | Code | [Duration arithmetic boundaries](../re/client-ailment-duration-inputs.md#3-complete-additive-equations): divide intelligence by 12 before bleed multiplication, poison Int >=150 and signed upper-only duration-bonus cap |
+| `0x1424fc1e0` / `0x1424fb5a0` / `0x141e6ae70` / `0x141e6b480` | Fn | [Native DoT-to-pool composition](../re/client-native-dot-pool-composition.md): original sorted-record getter, boolean wrapper and Life/ES numerical loss under supplied native provider binding |
+| `0x1424fd490..0x1424fd4e7` / `0x1424fb5f0` / `0x142513520` / `0x1425135a0` | Code/Fn | [Native DoT queue composition](../re/client-dot-native-composition.md): actual dirty propagation and ready-cache callbacks for 105 selected outputs; supplied masks/cache, not source-instance publication |
+| `0x1428068d0` / `0x142806e80` / `0x142807120` / `0x142809200` / `0x1428097a0` / `0x142809a40` | Fn | [Skill-duration coupling](../re/client-ailment-skill-duration.md): bleed/poison additive/final/base-duration numeric stages; no instance assignment or target-rate publication |
+| `0x140b2e11a..0x140b2e123` / `0x140b2e18e..0x140b2e197` | Code | [False duration-consumer candidates](../re/client-ailment-skill-duration.md#3-bounded-consumer-navigation-and-a-positive-label-collision): 6187/6188 select Atlas/League ClientStrings labels through text lookup, not same-numbered Stats |
+| `0x1425733e0` / `0x1425926c0` | Fn | First/last of twenty [ordered both-hand typed attack ranges](../re/client-attack-hit-formulas.md); separate base/added factors, conversion remainders and Lightning Purist min/max differences |
+| `0x142543a80` / `0x142544860` | Fn | First/last of four attack hand totals: wrapping signed32 typed sums, no saturation/clamp |
+| `0x1419e3530` | Fn | [Extra-arrow Life sacrifice](../re/client-integer-resource-mutations.md): wrapping percentage, floor-one capacity, arrow benefit before skip check and reason-7 integer payment |
+| `0x141b80a30` | Fn | [Conditional FireMortar terminal Mana refund](../re/client-terminal-mana-refunds.md): concrete `+528` tables, unused-chain percent/cost inputs and actual Mana integer receiver; preceding geometry is separate |
+| `0x141ee7320` | Fn | [Cost-stat result layout](../re/client-terminal-mana-refunds.md): first dword is `mana_cost`; distinct from the adjusted payment record's leading kind |
+| `0x141e6c350` | Fn | [Life Stats subscriber](../re/client-pool-maximum-refresh.md): maximum-key selection and World-mode gate to typed pool refresh |
+| `0x141e6b0a0` / `0x141e697e0` | Fn | Life / Mana-ES maximum refresh: selected client modes preserve current; Life clears carry; conditional rescaling differs |
+| `0x141e6b320` | Fn | [Common pool recovery controller](../re/client-recharge-rate-authority.md): local recharge state and independently read total recovery rate; installed Life active-state publisher is a no-op |
+| `0x141e6c7d0` / `0x141e6c950` / `0x141e6ca30` | Fn | Cost preparation, affordability and conditional payment; ES-before-Mana, insufficient-resource clamps and distinct reason-6 pool writes |
+| `0x141e699d0` / `0x141e6b6e0` / `0x141e6c0a0` | Fn | Life/Mana/ES integer-delta slot `+0x28`; distinct from floating loss slot `+0x48` |
+| `0x142544d00` / `0x142551dc0` | Fn | First/last of ten [final typed spell ranges](../re/client-spell-hit-formulas.md); complete conversion paths and branch equations |
+| `0x1425428a0` / `0x142542d10` | Fn | Spell min/max totals: wrapping signed32 sum of supplied typed ranges |
+| `0x141e06bb0` / `0x141e06290` | Fn | [Initial Buff granted values](../re/client-buff-initial-granted-values.md): recovery gate, raw LE32 and prefix-preserving normalization |
+| `0x14347e968` / `0x141717820` | Vt / Fn | [Concrete Buff observer](../re/client-buff-observer-attraction-shape.md): no-op gain/loss slots; separately guarded matrix output |
+| `0x142788580` / `0x142788e50` / `0x1427893d0` | Fn | [Reference-damage physical-defence estimates](../re/client-defence-estimates.md): generic/projectile/hit values; not actual-hit mitigation |
+| `0x141d1e400` / `0x142513810` | Fn / Leaf | Percent float helper / signed half-away-from-zero conversion; verified signatures matter to decompilation |
+| `0x1421c2ad0` / `0x1421c3700` | Fn | Network Stats component / override wrapper construction |
+| `0x14363bd90` / `0x1424cfa40` | Vt / Fn | Wrapper getter table / exact pair including zero, absent-key upstream fallback |
+| `0x1424fc1e0` / `0x142513630` | Fn | Separate raw-stat lookup / derived evaluator registration |
+| `0x142182790` / `0x141e40560` / `0x141e496c0` | Fn | Network Stats type factory / type constructor / shared native stats helper |
+| `0x1424fb790` / `0x14363d3b0` | Fn / Vt | Native stat object constructor / stored-value getter table |
+| `0x1424fd240` / `0x1424fd390` | Fn | Begin/nest / end update transaction; outermost end processes affected evaluations |
+| `0x1428e6720` / `0x1428e68b0` / `0x1424fb5f0` | Fn | [Cycle-checked dependency traversal / rank-map initialization / sorted reverse-dependency enqueue](../re/client-stat-dependency-order.md); duplicate declaration ranks can survive insertion |
+| `0x1424fcc80` / `0x1424fccf8` / `0x1424fcdb3` | Fn / Insn | Evaluation dispatcher / callback call / changed result write |
+| `0x142196ce0` / `0x141ee73d0` / `0x141ee7e70` | Fn | Network skill record construction / retained override providers / context accessor |
+| `0x1435c21c0` / `0x141fdeb10` / `0x141fdea50` | Vt / Fn | `0x1b4` skill/stat-set key-value update table, reader and serializer |
+| `0x142194482` / `0x14219464d` | Insn | `0x1b4` Actor branch / selected network skill-provider setter call |
+| `0x1424cfc00` / `0x1424cfd00` | Fn | Inherited-key notification masking/forwarding / listener dispatch; separate from native derived evaluation |
+| `0x141ee8ef0` / `0x141ee9043` / `0x141ee9071` | Fn / Insn | Native skill-data producer / unchanged BaseMultiplier contribution / divided DamageEffectiveness contribution |
+| `0x140101e50` / `0x1445b38cd` / `0x14193bebc` | Insn / G / Insn | Successful startup sets guard / flag / guarded native action-context builder |
+| `0x1400ac590` / `0x1426cce60` | Fn | Register / evaluate fire rate 2022 from base rate 2023 |
+| `0x1426d40f0` | Fn | Taken-as-fire rate 9564; saturation before downstream mitigation |
+| `0x1400ad7c0` / `0x1426da000` | Fn | Register / evaluate fire DoT total 3356 |
+| `0x14271a3f0` / `0x14281bd60` | Fn | Fire DoT resistance 17170 / fire ES bypass 9609 |
+| `0x1426db5c0` / `0x1426dc1b0` / `0x1426dcdb0` | Fn | Cold / lightning / chaos DoT mitigation; distinct resistance/guard rules |
+| `0x14274b370` / `0x14274d840` / `0x1428b0c50` | Fn | [Physical/elemental reduction inputs and physical ceiling](../re/client-reduction-inputs.md): conditional terms, small ceilings, Strength of Blood and dependency differences |
+| `0x1426dea90` / `0x1426df790` / `0x1426e2c70` | Fn | Physical/fire bypass split / chaos ES split; rounding without upper float saturation |
+| `0x1426cc330` / `0x1426ccf50` / `0x1426cfa50` | Fn | Physical / fire / chaos unaffected self-rate formulas; instance producers remain separate |
+| `0x1426e53f0` / `0x1426e7410` / `0x1426e7d60` | Fn | Life bypass sum / ES total / Life total |
+| `0x1426e7670` / `0x1426e7b00` | Fn | Normal / nonlethal ES overflow share to Mana |
+| `0x141e11dc0` / `0x141f79160` | Fn | [Owner/instance clock composition](../re/client-buff-clock-authority.md): insertion writes current-owner speed; selected later notifications preserve it while partial updates replace it; floor is not reapplied to received speed |
+| `0x141e07220` / `0x141e06290` / `0x141e067c0` | Fn | [Retained Buff replacement](../re/client-buff-replacement-composition.md): actual decoded-input conversion, temporary construction and selected field transfer; original identity and some initialization fields survive |
+| `0x141fdf870` / `0x141e692e0` / `0x141e68f70` | Fn | [Buff wire/source composition](../re/client-buff-wire-source-composition.md): original body reader, complete attribution selector and separately invoked Life-callback prefix; retained source overwrite is independent of damage-rate publication |
+| `0x141e66ec0` / `0x141e6c710` / `0x141e0fbc0` | Fn / Leaf | [Life-to-Buffs guard](../re/client-buff-clock-producers.md): configuration receiver, selected transition and advancement-flag setter |
+| `0x14286cea0` / `0x14287ac10` / `0x1428d2ea0` / `0x1428e4280` | Fn | [Bleeding policy inputs](../re/client-bleeding-policy-inputs.md): effective Crimson Dance, replacement stack cap, minion-suppressed movement override and exerted aggravation chance; not actual instance arbitration |
+| `0x142239940` | Fn | [BuffTemplates accessor](../re/client-dot-source-publication.md); named RF template amount is declared data, active publisher remains unresolved |
+| `0x1434876c0` / `0x14179d8a0` / `0x14179d9b0` | Vt / Fn | RF backend table, art-selector/transform refresh and presentation-object removal; tick/insertion slots empty |
+| `0x141819ed0` / `0x141e698e0` | Fn | Registered ClientOnlyKillSelf invoke / absolute pool setter; positive Life goes to zero, not contact-derived damage |
+| `0x141941c90` / `0x141651830` / `0x142199200` | Fn / Leaf / Fn | Bow/Wand action-variant selector, Actor weapon-state provider getter and mutable provider setter |
+| `0x141e97190` | Fn | [Equipment-to-provider refresh](../re/client-ranged-action-selection.md#equipment-records-update-the-same-provider) with hand records and stance/morph branches |
+| `0x1400fe9f0` / `0x141941bb0` | Fn | [Ordered startup registration](../re/client-ranged-action-selection.md#startup-registration-and-replacement-order) and existing-key factory replacement |
+| `0x1432e5718` / `0x14326d930` | Vt | Startup-selected default Melee variants 0/1; second includes Bow/Wand |
+| `0x1413c07a0` / `0x1413789e0` | Fn | [Winning action extensions](../re/client-action-extensions.md): target attachment/controller output and retained projectile zero-time update |
+| `0x141bb13a0` / `0x1412e2970` / `0x141bab560` | Fn | [Conditional projectile receivers](../re/client-projectile-extension-receivers.md): Entity allocation, same-table action clone and retained projectile binding |
+| `0x141edf5c0` / `0x141edf940` | Fn | [Entity-owned task container](../re/client-projectile-extension-receivers.md#entity-owned-tasks-identified-container-open-installed-types): typed factory registration and flag-gated zero-time dispatch |
+| `0x141ee00f0` / `0x141edff60` | Fn | [Serialized tasks and ownership](../re/client-entity-task-boundaries.md): separate factory pair entry, keyed replacement and removal |
+| `0x142188123` / `0x142188129` | Code | [Selected Life assignment crossing](../re/client-buff-clock-producers.md#a-decoded-life-assignment-clears-the-guard-on-revival): nonpositive-to-positive guard clear followed by separate fractional-carry reset |
+| `0x1416370f0` / `0x141ee0ba0` | Fn | [Task registry](../re/client-entity-task-boundaries.md#registry-storage-and-bounded-registration-inventory): 98 registrations in the exact inspected initializer; global total unresolved |
+| `0x141dd3420` / `0x141636280` | Fn | [Action-start task listener](../re/client-entity-task-listener.md): AnimationController publication through secondary slot zero; concrete animation-related callback |
+| `0x142188132` / `0x1401ebc40` / `0x141e11720` | Code / Fn | [Existing Buff clock contract](../re/client-buff-network-clock-contract.md): World dispatch, named Buffs getter and retained-instance duration/speed writes |
+| `0x141e11dc0` / `0x141e11fb0` / `0x141e10810` | Fn | [Ruin count publishers](../re/client-entity-task-ruin-listener.md): insertion/removal/quantity mutation before secondary-listener dispatch |
+| `0x141f793f0` / `0x1416a10f0` | Fn | [Ruin count consumer](../re/client-entity-task-ruin-listener.md): four-definition quantity aggregation and count effect/audio maintenance |
+| `0x14262d7d0` / `0x142659f80` / `0x1426a0ed0` | Fn | [Outgoing ailment rates](../re/client-ailment-outgoing-formulas.md): MH physical bleed, MH fire ignite and physical-source poison |
+| `0x142630720` / `0x142631e90` / `0x142633f80` | Fn | [Bleeding output family](../re/client-bleeding-output-family.md): offhand typed rates, hand/final asymmetry and critical aggregate |
+| `0x142656dc0` / `0x1426778f0` / `0x14267b2f0` | Fn | [Ignite output family](../re/client-ignite-output-family.md): complete typed min/max, hand qualification and critical/noncritical aggregate arithmetic |
+| `0x1426c4440` / `0x1426c97e0` | Fn | [Poison output family](../re/client-poison-output-family.md): wrapping integer total versus chaos-only gated always output; neither return upper-saturates |
+| `0x1426f1e20` / `0x1426f2800` / `0x14277fbb0` | Fn | [Ailment eligibility](../re/client-ailment-eligibility.md): all-damage permissions, conditional pairs and target poison gate |
+| `0x1427e9270` / `0x142825210` / `0x142866b80` | Fn | [Ailment chance inputs](../re/client-ailment-chance-inputs.md): generic ignite/poison and main-hand bleed chance composition |
+| `0x14275c050` / `0x14275c6a0` / `0x14276b920` | Fn | [Critical formulas](../re/client-critical-formulas.md): effective MH/OH probability and main-hand damage multiplier |
+| `0x142754c20` / `0x142756810` / `0x142758320` | Fn | [Complete critical inputs](../re/client-critical-inputs.md): MH/OH/spell base, increased/final, overrides and numeric order |
+| `0x1412cb660` / `0x143254eb0` | Fn / Vt | [Critical Link raw-value export](../re/client-critical-link-export.md): final slot `+0x4e8`, three ordered reads/appends; invocation and grant consumer remain unbound |
+| `0x141e11720` / `0x141e11fb0` | Fn | [Buff removal/rate composition](../re/client-buff-rate-independence.md): parsed `0x1c2` removes the instance; selected empty lifecycle leaves explicit total-rate override independent |
+| `0x141e069d0` / `0x141e10690` | Fn | [Clock/rate separation](../re/client-buff-rate-independence.md): visual-row resolver and exact secondary-tick jump; eligible timer expiry is separate from numerical rate withdrawal |
+| `0x141e91bc0..0x141e91d53` | Code | [Received-result/resource composition](../re/client-hit-result-resource-composition.md): target current ES, protects-Mana gate, sequence-derived inline stun suppression and duration rewrite; no damage amount |
+| `0x14164dc50` / `0x14020eb20` | Leaf | [Result composition helpers](../re/client-hit-result-resource-composition.md): original World lookup-container getter and direction-value/presence assignment |
+| `0x141e90ec4` / `0x141e915cf` / `0x141e91da7` / `0x141e92273` | Code | [Release/result/resource composition](../re/client-hit-checkpoint-resource-composition.md): original result call and three nested World checkpoints can consume independent pool assignments before return; supplied ordered input, not simulation frames or numerical Hit damage |
+| `0x141e91e00..0x141e91e17` / `0x141de8600` / `0x141e95620` | Code / Fn | [Action-present result composition](../re/client-hit-action-present-composition.md): sequence lookup, typed arguments and configured event cleanup under supplied Fireball state |
+| `0x141937f47..0x141937f5f` | Code | [Action arena initialization](../re/client-hit-action-present-composition.md): executed inline-buffer slice, not complete Action construction |
+| `0x142762810` / `0x142764010` / `0x142842fb0` / `0x14284a360` | Fn | [Penetration inputs](../re/client-penetration-inputs.md): generic/typed/hand composition and highest-uncapped ties; actual hit application remains separate |
+| `0x1427d0140` / `0x1427d2480` / `0x14287ae20` | Fn | [Hit defender modifiers](../re/client-hit-defender-modifiers.md): shared/physical final and elemental-ignore predicate; not actual-hit amount calculation |
+| `0x142856610` / `0x14288f2f0` / `0x14288f6d0` | Fn | [Virtual ailment faster inputs](../re/client-ailment-multiplier-inputs.md): ignite/poison/bleed qualifications and additive inputs |
+| `0x142774170` / `0x142774bb0` / `0x142774f70` | Fn | [Combined ailment multipliers](../re/client-ailment-multiplier-inputs.md): bleed/ignite/poison integer sums and conditional scopes |
+| `0x142770fd0` / `0x142772600` / `0x142772cc0` | Fn | [Common DoT multiplier inputs](../re/client-dot-multiplier-inputs.md): generic qualifications, cold divide-before-multiply versus chaos multiply-before-divide |
+| `0x142773350` / `0x142773640` / `0x142773e80` | Fn | [Ailment and non-ailment multiplier totals](../re/client-dot-multiplier-inputs.md): Elder contribution, typed sums and chaos-only extra input |
+| `0x1420b5ec0` / `0x141e19f10` / `0x141e1a5e0` | Fn | [GroundEffect lifecycle](../re/client-ground-effect-boundary.md): callable timer replacement, tick/expiry, conditional Buffs guard and concrete termination |
+| `0x141e19b10` / `0x141e1b500` / `0x141e1b470` | Fn | [GroundEffect configuration and lifetime transport](../re/client-ground-effect-boundary.md): object_type enum, visual-row selection and five-byte state receiver |
+| `0x1421c3d20` / `0x14218fb00` / `0x1421c3ed0` | Fn | [GroundEffect retained-token ownership](../re/client-ground-effect-ownership.md): typed ServerFill parent, child create/reuse and shared cancellation-flag attachment |
+| `0x141ed636f` / `0x141df96db` | Code | [Aura source authority](../re/client-dot-source-authority.md): mode-2 registration and metadata compiler eligibility branch |
+| `0x14128dadb` / `0x1413dfc9f` | Code | [Fireball final-factory correction](../re/client-hit-production.md#concrete-action-binding): client factory/copy overwrite the base primary table |
+| `0x141e6a190` | Fn | Life tick; conditional Life/ES/Mana continuous integration |
+| `0x141e6ae70` / `0x141e6b480` / `0x141e6cba0` | Fn | Life / ES / Mana continuous pool steps |
+| `0x141e6acc0` | Fn | [Life-loss threshold walker](../re/client-resource-read-order.md): proposed-state comparison, script/listener boundary and threshold cursor advance before common loss |
+| `0x141e6a6b0` | Fn | Integer/fractional loss reducer; float overflow result in XMM0 |
+| `0x141e6a8a0` / `0x141e6a780` / `0x141e6ae00` | Fn | Life floors / ES overflow routing / Mana overflow routing |
+| `0x141e69fb0` / `0x141e69fd1` | Fn / Insn | Incoming decoded resource setter / current assignment |
+| `0x141e684b0` | Leaf | Assignment change notification: marks Life `+0x268` dirty |
+| `0x141e6a0a0` / `0x141e6a110` | Fn | Guarded full/empty ES notifications after pool changes |
+| `0x141e6bcb0` / `0x141e6bd30` / `0x141e6bd80` | Fn | Life/Mana/ES loss notifications, ES-protects-Mana routing and event boundary |
+| `0x141e6bde0` / `0x14015a670` | Fn / Leaf | Conditional recharge-delay update / positive-infinity return |
+| `0x1421880b7` / `0x1421880cb` / `0x1421880e6` | Insn | World `0x1b1` calls for ES / Mana / Life |
+| `0x142183840` | Fn | World `+0x90` component checkpoint; [peer-owned ordering reused through parsed assignment and resource arithmetic](../re/client-resource-checkpoint-composition.md) |
+| `0x142543a80` / `0x1425733e0` | Fn | Main-hand minimum total / physical damage evaluators |
+| `0x142594860` / `0x1425988a0` | Fn | Main-hand physical minimum base / added inputs |
+| `0x1426fb060` / `0x142756600` | Fn | Main-hand accuracy / final critical-chance evaluators |
+| `0x1427854b0` / `0x1424ff510` | Fn | Sheet-reference hit chance / numeric chance helper; not a defender roll |
+| `0x141e90f50` / `0x141e91580` | Fn | `0x1af` Actor feedback consumer / virtual result dispatcher |
+| `0x141939f40` / `0x14193a170` / `0x141e91330` | Fn | Retrieve queued action result / phase range processing / filter and dispatch |
+| `0x141e96630` / `0x141e95e60` / `0x141e96790` | Fn | Target control/listeners / timed interruption request / knockback displacement |
+| `0x141e95620` / `0x141ea08a0` | Fn | Actor event selection / callable forwarding to event execution; consequences not exhausted |
+| `0x141bb13a0` / `0x141ba99d0` / `0x141bb83c0` | Fn | Fireball-bound flight callback / projectile contact query / spatial grid walker |
+| `0x141bbaf70` / `0x141ba7b30` | Fn | Spatial candidate filtering / projectile contact and avoidance processing |
+| `0x141266030` / `0x1412b0260` / `0x143359808` | Fn / Vt | Named MonsterMortarAttack registration / ordinary factory / final table; Sand Spitter data binding |
+| `0x141b6a690` / `0x141b74d70` / `0x1412e9d10` | Fn / Leaf | MonsterMortarAttack radius expansion / spatial walker / per-target queued-result lookup |
+| `0x1419eee20` / `0x141ebd2f0` | Fn | Concrete Fireball defense wrapper / target spell-dodge decision |
+| `0x141c98700` / `0x141c9aa80` / `0x141ebd1a0` | Fn | Selected Melee range test / contact accuracy dispatch / target entropy update |
+| `0x141e40bd0` / `0x1435dd4e8` | Leaf / Vt | Stats entropy countdown and lazy-reset flag / actual component tick table |
+| `0x1426125d0` / `0x142613360` / `0x14262b290` | Fn | Outgoing RF base 14408 / area-skill intermediate 8198 / final area rate 5981 |
+| `0x1428e68b0` / `0x14458e838` / `0x14458e848` / `0x14458e840` | Fn / G | VirtualStatContextFlags table-to-mask initializer / three category masks; distinct from GEAL modes |
+| `0x14013ebc0` / `0x14458e830` / `0x141df94b0` | Fn / G / Fn | GEAL client-mode construction / mode / named-callable lookup and eligibility |
+| `0x141ec7790` / `0x141ee1bf0` | Fn | GEAL name/mode metadata registration / mode insertion and merging |
+| `0x14359b6e0` / `0x141dfeec0` | Vt / Leaf | Accepted metadata-only callable / empty typed-value-vector return |
+| `0x1420c6700` / `0x1420cae40` / `0x141fdc483` | Fn / Fn / Insn | Native current-Life read / supplied-program Life listener construction / listener-to-VM call |
+| `0x143467ae8` / `0x1421922e0` / `0x141e88020` | Vt / Fn | Client Actor config table / component script wrapper / custom-event table producer |
+| `0x141de5e20` / `0x141de5720` / `0x140e35420` | Fn / Fn / Leaf | Event program append / supplied-token compilation / folded custom-event name hash |
+| `0x1421845b0` / `0x142184680` / `0x142184870` | Fn | Predictive component ticks / lockstep message-interleaved ticks / later lockstep entity range |
+| `0x1415f5d50` | Fn | Registers Render callbacks on source/target Actor result signals |
+| `0x141600c10` / `0x141600aa0` / `0x141609f40` | Fn | Source/false-branch/target Render callbacks; no proved pool pre-deduction |
+| `0x141e91a9d` / `0x141e91d37` / `0x1416016f1` | Insn | [Received-result qualifiers](../re/client-hit-result-qualifiers.md): leech/stun control rewrites, duration-only suppression and selected critical-feedback test |
+
 ### Player Actor scale ([04](04-player-entity.md#41a-player-actor-scale-299))
 
 | Address | Kind | What |
 |---|---|---|
-| `0x1421c2f40` | Fn | Creation Stats pairs reach the network setter |
+| `0x1421c2f40` | Fn | [Initial Stats bytes to Life loss](../re/client-initial-stats-rate.md): compact pair decoding, real overrides, entropy transport and later numerical Life integration |
 | `0x1424cfa40` | Fn | Network stat override getter; upstream fallback only when absent |
 | `0x1424cfaf0` | Fn | Insert/replace one raw pair, notifying only that key |
+| `0x1421881b6` / `0x141e6af61` / `0x141e6afb1` | Site | [Parsed Stats to Life loss](../re/client-network-rate-composition.md): target provider, full-step checkpoint and actual total-rate read; distinct from source-rate publication |
 | `0x1424cfd00` | Fn | Stat change notification to registered listeners |
 | `0x141fe1350` | Fn | 0x1b3 reader; world handler `0x142187480` uses the same setter |
 | `0x1400caf90` | Fn | Register final1973 evaluator `0x1427ecc30` |
@@ -204,7 +353,7 @@ G = global / static data.
 | `0x141efb140` | Fn | a passive's gold respec cost: VillageBalancePerLevelShared GoldRespecCost × multiplier |
 | `0x1409d03bb`, `0x1409da517` | Fn | "Refund All" → C→S 0x37 (id only) |
 | `0x141eed000` | Fn | Atlas passive tree check |
-| `0x1435ddb78` (read `0x141fdf870`), `0x1435dd918` (read `0x141fdfdd0`) | Cls | S→C 0x1c1 add buff, 0x1c2 remove buff |
+| `0x1435ddb78` (write `0x141fdf430`, read `0x141fdf870`), `0x1435dd918` (read `0x141fdfdd0`) | Cls | S→C 0x1c1 add buff, 0x1c2 remove buff; [granted-value gate and cardinality](../re/client-buff-wire-magnitudes.md) |
 | `0x141e11720` | Fn | Buffs component: 0x1c1/0x1c2 handler (world handler cases 0x1c1, 0x1c2) |
 | `0x141e11fb0` | Fn | Removes an installed Buffs pointer and marks instance +0xd0 bit 0x10 inactive; instance ID is +0x9c. Native hybrid flask removal verified ([13](13-items.md) §8). |
 | `0x142087910` | Fn | effect script: plays a MiscAnimated as a `Metadata/Effects/*Effect` object |
@@ -392,7 +541,7 @@ that does not exist with hash: ", "Area reported by instance does not exist", "U
 | `0x14215f700` | Fn | C→S use a skill: lockstep 0x018e (dx, dy) / 0x018f (object) when the network mode `+0x984` is 2, else 0x25 / 0x24 |
 | `0x14215fb10` / `0x14215fcb0` / `0x14215fe50` | Fn | C→S lockstep 0x0192 (new dx, dy) / 0x0195 (release) / 0x0196 (release a skill) |
 | `0x142183930` | Fn | world update: lockstep runs the queued server frames (deque `+0x9c0`, count `+0x9d8`), catching up × 1.01–5 |
-| `0x142183ce0` | Fn | world step (vtable `+0x360`): one server frame's messages, then the objects' ticks |
+| `0x142183ce0` | Fn | world step (`+0x360`): predictive messages-before-ticks; lockstep interleaves messages at entity/component boundaries |
 | `0x1421872b0` | Fn | world message intake: queues messages; S→C 0x2b5 ends a frame (pushes world `+0x11c` ms), 0x2b6 sets it |
 | `0x141645fa0` | Fn | S→C 0x2b6: world `+0x11c` = the frame length in ms |
 | `0x14190faf0` | Fn | config `networking_type` → network mode (0 predictive, 2 lockstep, 3 auto) |

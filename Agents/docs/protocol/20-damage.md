@@ -7,6 +7,18 @@ life total, so everything here happens before that total is sent. The reference 
 against the local Path of Building (`Tools/PathOfBuilding/src/Modules/CalcOffence.lua`: `dmgTypeList`,
 `buildConversionTable` and `calcDamage`).
 
+### Client calculation research is a separate evidence track
+
+The description above scopes this page's Gateway model, not everything the client can calculate.
+The executable also contains per-minute DoT evaluators and a Life component that integrates continuous rates.
+Network Stats overrides can supply those rates directly, and `0x1b1` assigns absolute resource values.
+Neither a formula's presence nor a combat-feedback packet proves an independent hit roll and pre-deduction.
+See [client damage calculation](../re/client-damage-calculation.md) for the verified functions, missing bindings,
+multi-stage saturation, source identities and the Hit/DoT research workbench.
+Those static findings do not change server behavior or establish official-server equivalence.
+The [client combat signals](29-client-combat-signals.md) page separates the `0x1af` read sequence and Render
+callbacks from `0x1b1` resource assignment and `0x1b3` stat overrides.
+
 ## 1. Types and order
 
 A hit is a **packet** with a separate minimum/maximum range for each type:

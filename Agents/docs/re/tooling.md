@@ -6,9 +6,12 @@ apart from the login key blobs, so addresses are the same in both.
 
 ## 1. Ghidra (headless, read-only)
 
-A fully analyzed project already exists: `Tools/ghidra-projects`, project `poe3293`, program `PathOfExile.exe` (the
-same binary as `Client/Game.exe`). Do not rename the project or program, because the scripts use those names. REA's
-own Ghidra import of the 79 MB file exceeds its 1-hour limit, so use this project instead of re-analyzing.
+A previous fully analyzed project was stored at `Tools/ghidra-projects`, project `poe3293`, program `PathOfExile.exe`.
+It and the full dump below are local, ignored artifacts and may be absent in a fresh clone or another worktree.
+Verify their presence and binary identity before relying on them.
+When present, do not rename the project or program: the existing runners use those names.
+An earlier REA full Ghidra import exceeded its one-hour limit.
+For bounded offline questions without that project, use the selected-function workflow below.
 
 Runner: `bash scripts/re/ghidra/g.sh <Script.java> <args>` (about 12–15 s per call, `-noanalysis -readOnly`). It sets
 `JAVA_HOME` to `Tools/jdk-21`, takes scripts from its own directory (so a worktree's scripts run as they are) and prints
@@ -66,6 +69,67 @@ sort -t$'\t' -k4,4nr $D/index.tsv | head                       # most-called fun
 
 The decompiler sometimes hides field writes in casts (`*(undefined4 *)(param_1 + 0x2b4)` vs `param_1[0xad]`), so
 grep both forms or fall back to `finddisp.py` for the instruction level.
+
+### Bounded damage audit
+
+[damage_audit.py](../../../scripts/re/damage_audit.py) reads original PE bytes without loading or running the client.
+It pins the executable SHA256 used in [client damage research](client-damage-calculation.md).
+It follows `.pdata` `UNW_FLAG_CHAININFO` to the owning function and preserves each separate body range.
+Do not disassemble the enclosing address span across split-function gaps.
+The optional leaf ranges are explicitly analyst-reviewed boundaries, not automatically recovered functions.
+
+Use existing pefile/Capstone installations; `--python-libs` can select an existing dependency directory.
+Run with `-I -B`: a neighboring `scripts/re/dis.py` otherwise shadows Python's standard `dis` module.
+The output must be a **new** directory under the current checkout's `Tools/re/out/`.
+Pass explicit `--exe` and `--stats` paths when a worktree reuses the primary checkout's large files.
+
+```powershell
+python -I -B scripts/re/damage_audit.py `
+  --exe Client/Game.exe --stats data/tables/Stats.json `
+  --out Tools/re/out/client-damage-audit/reproduction `
+  --functions 0x1424cfa40 0x1426da000 0x141e6a6b0 0x141e69fb0 `
+  --leaf-ranges 0x1424cfa40:0x1424cfac2 `
+  --call-refs 0x141e6a6b0 --stat-refs 2023 3356 `
+  --pointer-refs 0x141e6a8a0 --virtual-offsets 0x48 `
+  --rip-refs 0x14363bd90
+```
+
+`audit.json` contains input hashes, original range offsets/hashes, instruction records and bounded scan results.
+`targets.json` supplies exact function bodies and direct-callee context to
+[BoundedFunctions.java](../../../scripts/re/ghidra/BoundedFunctions.java).
+The script decompiles only selected functions, with a 30-second bound per function, under Ghidra `-noanalysis`.
+An example using the repository's conventional tool locations is:
+
+```powershell
+$env:JAVA_HOME = (Resolve-Path Tools/jdk-21).Path
+$auditDirectory = (Resolve-Path Tools/re/out/client-damage-audit/reproduction).Path
+& Tools/ghidra_12.1.4_PUBLIC_20260921/ghidra_12.1.4_PUBLIC/support/analyzeHeadless.bat `
+  Tools/re/out/bounded-project DamageAudit -import Client/Game.exe -noanalysis `
+  -scriptPath (Resolve-Path scripts/re/ghidra).Path `
+  -postScript BoundedFunctions.java "$auditDirectory/targets.json" "$auditDirectory/decompilations.jsonl" `
+  -deleteProject
+```
+
+Create the project parent first, and use installed tool/input paths if those conventional locations are absent.
+On this Windows Ghidra version, the **project directory** cannot have a path component starting with `.`.
+A project below `.codex` fails; choose an ignored project directory under the primary checkout instead.
+Source scripts and output files may still reside in the worktree.
+This stores a disposable analysis project, not a CI worktree or a server deployment.
+Do not start whole-program autoanalysis as an implicit fallback.
+
+Search limitations are part of the result:
+
+- E8/E9 scans cover direct calls/jumps at decoded instruction boundaries, not register or virtual targets.
+- `mov edx, key` is a candidate; allocation sizes and action IDs can match stat keys.
+- The FF displacement scan covers selected indirect memory call/jump encodings, not receiver identity.
+- RIP-reference search covers RIP-relative LEA, not every computed or loaded reference.
+- Pointer occurrences alone are not proof of a vtable, an installed object or runtime reachability.
+- Unwind-less candidate positions stay unresolved unless independently bounded.
+- Ghidra can omit floating-point arguments/returns, notably XMM0 overflow from pool loss reducers.
+
+Keep complete generated code and machine output ignored.
+Commit concise findings, selected anchors and the metadata-only evidence manifest, never the client or full dumps.
+The offline records are not REA-issued Evidence IDs and do not establish official-server execution.
 
 Earlier decompile output is kept in `Tools/re/out/*.c` (untracked). The files used this session: `inst*.c` (instance
 connection), `inst11.c` (the whole instance dispatcher, 5275 lines), `inst10.c` (instance factory), `obj1.c` (world
