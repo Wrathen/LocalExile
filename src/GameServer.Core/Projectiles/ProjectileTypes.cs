@@ -60,7 +60,10 @@ public sealed record ProjectileProfile(string Id)
     /// The host adopts/calibrates the reference distance, independently of projectile count.</summary>
     public double AimSpreadDistance { get; init; }
     public double Speed { get; init; } = 100;
-    public double Range { get; init; } = 120;
+    /// <summary>Maximum flight distance of one movement instance, in cells (10 cells = 1 m): the client caps direct
+    /// flight at 150 cells = 15 m. The Gateway seeds this from <c>system_settings.projectile_maximum_range_cells</c>;
+    /// fork, chain and split start a new movement instance with a fresh budget.</summary>
+    public double Range { get; init; } = 150;
     public double Radius { get; init; } = 4;
     public long Lifetime { get; init; } = 1200000;
     public long SequentialDelay { get; init; }

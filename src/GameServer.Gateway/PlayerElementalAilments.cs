@@ -25,8 +25,13 @@ sealed class PlayerElementalAilments
         lock (effects) return effects.Where(e => e.Kind == kind && e.From <= now && now < e.Until)
             .Select(e => e.Magnitude).DefaultIfEmpty().Max();
     }
-    public double ActionFactor(double now) => Math.Max(actionFloor,
-        1 - Math.Max(Magnitude(Kind.Freeze, now) * freezeEffect, Magnitude(Kind.Chill, now)) / 100);
+    /// <summary>Action speed is one additive bucket: chill/freeze and the character's own action_speed_-% sum, then the
+    /// result multiplies attack, cast and movement pacing. A positive <paramref name="statReduction"/> is slower; a
+    /// negative value (Tailwind, Acceleration Shrine) is faster.</summary>
+    public double TotalActionFactor(double now, double statReduction) => Math.Max(actionFloor,
+        1 - (Math.Max(Magnitude(Kind.Freeze, now) * freezeEffect, Magnitude(Kind.Chill, now)) + statReduction) / 100);
+
+    public double ActionFactor(double now) => TotalActionFactor(now, 0);
     public double DamageTakenFactor(double now) => 1 + Magnitude(Kind.Shock, now) / 100;
 
     static string Name(Kind kind) => kind.ToString().ToLowerInvariant();

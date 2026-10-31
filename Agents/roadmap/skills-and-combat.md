@@ -457,6 +457,9 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   (extraction manifest version 2 supplies the ordered stance pools and exact rig contacts for all seven classes).
   Complete off-hand timing/damage and nonzero intrinsic attack repeats remain open.
   Basic catalog flight does not implement all special skill behavior; unknown metadata is refused before costs.
+  One movement instance is capped at 150 cells (15 m) through `projectile_maximum_range_cells`; fork, chain and split
+  get a fresh per-leg budget. Open: per-skill duration before the cap and a native check of the continuation boundary.
+  Action speed is not a projectile input; the native action-speed/Tailwind contract remains #246.
   Issue #75 accuracy, shared critical rolls, impale and leech are integrated with automated composition coverage.
   Earlier native packet/collision controls need retesting on the new path; actor positions still use integer walk
   estimates and shared projectile radii; Gateway actor radii are zero, making area coverage center-based even

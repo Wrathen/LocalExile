@@ -295,12 +295,19 @@ partial class Program
                 SupportedAttackDamage.Raw(offWeapon, Get), attackConversion, Get));
         foreach (var (stat, value) in ailmentRows)
             if (Stats.Key(stat) is uint key && !devSet.Contains(key)) stats[key] = value;
+        // One additive action-speed bucket: the character's own action_speed_-% (a negative value is faster) plus
+        // chill/freeze, with the base-speed floor applied once. The panel and the server pacing read the same total.
+        conn.ElementalAilments.Reconcile(Get);
         var ailments = conn.ElementalAilments.Snapshot(conn.Clock.Elapsed.TotalSeconds);
         foreach (var (name, value) in new[] { ("is_ignited", ailments.Ignite ? 1 : 0),
             ("is_chilled", ailments.Chill > 0 ? 1 : 0), ("is_frozen", ailments.Freeze ? 1 : 0),
-            ("is_shocked", ailments.Shock > 0 ? 1 : 0), ("action_speed_-%", (int)Math.Round(100 * (1 - conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds)))),
-            ("intermediary_combined_action_speed_+%", (int)Math.Round(-100 * (1 - conn.ElementalAilments.ActionFactor(conn.Clock.Elapsed.TotalSeconds)))) })
+            ("is_shocked", ailments.Shock > 0 ? 1 : 0) })
             if (Stats.Key(name) is uint key && value != 0) stats[key] = stats.GetValueOrDefault(key) + value;
+        var actionFactor = conn.ElementalAilments.TotalActionFactor(conn.Clock.Elapsed.TotalSeconds, Get("action_speed_-%"));
+        if (Stats.Key("action_speed_-%") is uint actionSpeedKey && !devSet.Contains(actionSpeedKey))
+            stats[actionSpeedKey] = (int)Math.Round(100 * (1 - actionFactor));
+        if (Stats.Key("intermediary_combined_action_speed_+%") is uint actionCombinedKey && !devSet.Contains(actionCombinedKey))
+            stats[actionCombinedKey] = (int)Math.Round(100 * (actionFactor - 1));
         // The conditions as they are now; the player tick sends the chance again when they change.
         int suppression = Suppression(conn).Chance;
         foreach (uint key in SuppressionChanceKeys) stats[key] = suppression;

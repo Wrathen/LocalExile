@@ -56,12 +56,13 @@ sealed class PlayerHitRecovery
         || name is "stun_threshold_+" or "stun_threshold_increased_by_overcapped_fire_resistance"
             or "local_flask_stun_recovery_+%_while_healing" or "block_and_stun_+%_recovery_per_fortification";
 
-    public static float Duration(Func<string, int> get)
+    public static float Duration(Func<string, int> get, double actionSpeed = 1)
     {
         double recovery = 1 + get("stun_recovery_+%") / 100.0;
         double duration = 1 + get("stun_duration_on_self_+%") / 100.0;
-        if (recovery <= 0 || duration <= 0) return 0;
-        double seconds = Math.Ceiling(.35 * 1.2 * duration / recovery / .033) * .033;
+        if (recovery <= 0 || duration <= 0 || !double.IsFinite(actionSpeed) || actionSpeed <= 0) return 0;
+        // Action speed also scales the recovery animation; stun_recovery_+% is the separate, additive stun stat.
+        double seconds = Math.Ceiling(.35 * 1.2 * duration / recovery / actionSpeed / .033) * .033;
         // Do not let malformed developer stats create an unrepresentable native time or an unbounded input lockout.
         return seconds is > 0 and <= 60 ? (float)seconds : 0;
     }

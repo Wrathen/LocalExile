@@ -58,6 +58,65 @@ public sealed class GameModeAilmentIntegrationTests : IDisposable
         Assert.Equal((int)Math.Ceiling(beforeCast / .7), (int)Call("CastMs", conn, spell, (ushort)0)!);
     }
 
+    [Fact]
+    public void Action_speed_adds_to_chill_in_one_bucket_and_scales_attack_cast_and_walk()
+    {
+        var conn = Connection("Standard");
+        int attack = Program.SkillsFor(conn).EffectRow("HeavyStrike");
+        int spell = Program.SkillsFor(conn).EffectRow("Fireball");
+        double baseAttack = (double)Call("SkillAttackSeconds", conn, attack, 1)!;
+        int baseCast = (int)Call("CastMs", conn, spell, (ushort)0)!;
+        Assert.True(baseCast > 0);
+
+        uint key = Program.Stats.Key("action_speed_-%") ?? throw new InvalidOperationException("action_speed_-%");
+        lock (conn.Monsters) conn.PlayerStats[key] = -50; // Negative reduction: 50% faster.
+        Assert.Equal(1.5, Program.PlayerActionFactor(conn), 6);
+        Assert.Equal(baseAttack / 1.5, (double)Call("SkillAttackSeconds", conn, attack, 1)!, 6);
+        Assert.Equal((int)Math.Ceiling(baseCast / 1.5), (int)Call("CastMs", conn, spell, (ushort)0)!);
+
+        double walk = Program.WalkSpeed * (100 + conn.Pools.MovementVelocityPct) / 100 * 1.5;
+        conn.ApplyMovementSpeed();
+        Assert.Equal(walk, conn.Walk.Speed, 6);
+
+        var cold = DamagePacket.Of(DamageType.Cold, conn.PlayerMaxLife, conn.PlayerMaxLife);
+        double now = conn.Clock.Elapsed.TotalSeconds;
+        conn.Clock.Stop();
+        conn.ElementalAilments.Apply(cold, cold, false, conn.PlayerMaxLife, now, _ => 0, new Random(1));
+
+        // +50% action speed and a 30% chill are additive, not multiplicative: 1.20, not 1.5 * 0.7.
+        Assert.Equal(1.2, Program.PlayerActionFactor(conn), 6);
+        conn.ApplyMovementSpeed();
+        Assert.Equal(walk / 1.5 * 1.2, conn.Walk.Speed, 6);
+    }
+
+    [Fact]
+    public void New_actions_are_limited_to_one_per_server_tick_but_channel_repeats_are_not()
+    {
+        var conn = Connection("Standard");
+        int spell = Program.SkillsFor(conn).EffectRow("Fireball");
+        int attack = Program.SkillsFor(conn).EffectRow("HeavyStrike");
+        uint key = Program.Stats.Key("action_speed_-%") ?? throw new InvalidOperationException("action_speed_-%");
+        lock (conn.Monsters) conn.PlayerStats[key] = -1_000_000;
+        int ms = (int)Call("CastMs", conn, spell, (ushort)0)!;
+        Assert.Equal(34, ms); // 1/30 s tick rounded up to whole milliseconds
+        Assert.Equal(Program.TickSeconds, (double)Call("SkillAttackSeconds", conn, attack, 1)!, 6);
+        Assert.True((double)Call("SupportedChannelSeconds", conn, (ushort)attack)! < Program.TickSeconds);
+    }
+
+    [Fact]
+    public async Task Action_speed_and_stats_snapshots_do_not_deadlock()
+    {
+        var conn = Connection("Standard");
+        uint key = Program.Stats.Key("action_speed_-%") ?? throw new InvalidOperationException("action_speed_-%");
+        lock (conn.Monsters) conn.PlayerStats[key] = -50;
+        var work = Enumerable.Range(0, 32).SelectMany(_ => new Task[]
+        {
+            Task.Run(() => Program.PlayerActionFactor(conn)),
+            Task.Run(() => Program.CharacterPlayerStats(conn)),
+        });
+        await Task.WhenAll(work).WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
     public void Dispose()
     {
         foreach (string name in characters) PlayerInventories.Forget(name);

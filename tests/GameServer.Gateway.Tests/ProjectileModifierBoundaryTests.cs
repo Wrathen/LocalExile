@@ -22,10 +22,31 @@ public class ProjectileModifierBoundaryTests
         Assert.Equal(0, profile.Split);
         Assert.True(profile.Returns);
         Assert.Equal(40, profile.AimSpreadDistance);
+        Assert.Equal(150, profile.Range);
         Assert.Equal(150, profile.ReturnOvershoot);
         Assert.True(profile.ExcludeTurnaroundTarget);
         Assert.True(profile.SkipDeniedContacts); Assert.True(profile.SkipDeniedReturnContacts);
         Assert.Equal(ProjectileHitScope.Emission, profile.HitRule.Scope);
+    }
+
+    [Fact]
+    public void A_maximum_range_override_caps_the_configured_range()
+    {
+        var profile = GatewayProjectileDefaults.Resolve("synthetic",
+            Stats(("projectile_maximum_range_override", 48)), 100, attack: false);
+        Assert.Equal(48, profile.Range);
+    }
+
+    [Fact]
+    public void A_distance_override_still_obeys_the_maximum_range_override()
+    {
+        var shorter = GatewayProjectileDefaults.Resolve("synthetic",
+            Stats(("projectile_distance_override", 35)), 100, attack: false);
+        Assert.Equal(35, shorter.Range);
+
+        var capped = GatewayProjectileDefaults.Resolve("synthetic",
+            Stats(("projectile_distance_override", 200), ("projectile_maximum_range_override", 48)), 100, attack: false);
+        Assert.Equal(48, capped.Range);
     }
 
     static ProjectileProfile Resolve(ProjectileProfile profile, Func<string, int> get, bool attack = false,

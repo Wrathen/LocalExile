@@ -55,6 +55,10 @@ static class GatewayProjectileModifiers
                 throw new InvalidOperationException("Distance override needs an explicit early-end recipe for " + p.Id);
             p = p with { Range = distance };
         }
+        // "Projectiles from Supported Skills have X metres maximum Direct Flight": the values are client units (10 per
+        // metre), so 48 is 4.8 m. It caps rather than replaces either the baseline or a distance override.
+        if (get("projectile_maximum_range_override") is > 0 and var maximum)
+            p = p with { Range = Math.Min(p.Range, maximum) };
         ProjectileProfile ReturnControls(ProjectileProfile target) => target with
         {
             ReturnChancePercent = Math.Max(target.ReturnChancePercent, Math.Clamp(get("projectile_return_%_chance"), 0, 100)),

@@ -141,10 +141,11 @@ Part of [Status](../Status.md); what to build next in this area is in
   `stats`/`mods`/`mod_stats` tables hold 23,346 / 40,355 / 60,695 reference rows and `effective_mod_stats` joins the
   range overrides. A fresh database gets all of them on the first Gateway start; `extract-data.ps1` checks `Stats.json`,
   `Mods.json`, `BaseItemTypes.json`, `ItemClasses.json`, `Tags.json` and `UniqueStashLayout.json` as part of its `tables`
-  entry. `system_settings` seeds 45 numeric knobs: 21 socket caps by item class (wand 3, body 6, helmet/gloves/boots 4,
+  entry. `system_settings` seeds 46 numeric knobs: 21 socket caps by item class (wand 3, body 6, helmet/gloves/boots 4,
   shield 3, belt 0, two-handed 6), rare prefix/suffix caps (3/3 ordinary, 2/2 jewels), passive points per level, gold
-  chance/amount/auto-loot, six drop multipliers, pack density/size, experience multiplier, maximum level, default
-  tattoo/jewel limits and grace period; `/game_data setting` changes a number and reloads it. Live: a wand set to six
+  chance/amount/auto-loot, the 150-cell projectile maximum range, six drop multipliers, pack density/size, experience
+  multiplier, maximum level, default tattoo/jewel limits and grace period; `/game_data setting` changes a number and
+  reloads it. Live: a wand set to six
   sockets accepted `RRGBBB` and was reduced back to three; `passive_points_per_level = 2` made the 0x33 client budget
   and server budget agree at 1198 points. The item-template schema exists, but custom item templates, custom names and
   the admin panel are not implemented yet.

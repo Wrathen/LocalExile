@@ -1168,7 +1168,8 @@ Live 2026-10-18 with the Witch's Fireball. Code: `SkillCatalog.EffectStats`, `Ge
   Base chances at or below 20% are discarded before applying unconditional stun avoidance.
   The life threshold includes unconditional `stun_threshold_+%`; known stun immunity is respected.
   Duration uses PoB's 350 ms base, the extracted Monster.ot's 20% more melee stun duration, self duration modifiers,
-  and the player's final stun recovery, rounded upward to a 33 ms frame (normally 429 ms).
+  the player's final stun recovery and the current action-speed factor, rounded upward to a 33 ms frame (normally
+  429 ms at 0% action speed).
   Invalid stats yielding a nonpositive duration or more than 60 s disable recovery rather than locking input.
   `SendPlayerHitRecovery` commits cancellation inside the send gate after rechecking survival and active recovery.
   It increments `ActionCount`, clears channel hits, and stops `PlayerWalk` at its current cell.
@@ -1577,6 +1578,22 @@ nothing by itself: its slot 17 reads nothing and almost every other slot is a ba
   At 0/+100/-50% raw player speed, the logs reported 95.7/191.4/47.8 cells per second; the actual 0x1ba payloads
   carried durations 1.212375/0.606187/2.424749 seconds. Before the patch, both 0 and +100% used 95.7 cells per second.
   These checks cover travel timing, not moving-target collision or pixel-level matching with the official game.
+- **Maximum range and action speed (2026-10-31).** One movement instance is capped at 150 client units = 15 m
+  (10 units per metre; 1 Gateway cell is 0.1 m). The Gateway baseline is now 150 cells through
+  `system_settings.projectile_maximum_range_cells`; `projectile_distance_override` sets an exact shorter distance and
+  `projectile_maximum_range_override` caps it. Fork, chain and split are new movement instances, so each continuation
+  leg gets a fresh 15 m budget and total travel can exceed 15 m; return keeps its measured 150-cell overshoot.
+  Action speed is not a projectile input: it changes attack/cast/movement pacing, not projectile speed or the cap.
+  Projectile speed only changes the time to the endpoint (and how far a limited-duration projectile gets before it
+  expires, up to the cap). `action_speed_-%` is composed additively with chill/freeze and then multiplies the final
+  attack, cast, movement and stun-recovery paces; it does not change the attack/cast/movement stats themselves. New
+  actions are limited to one per server frame (30/s); channelling repeats use their speed-only interval and are exempt
+  from that cap. Trap/mine throwing, warcries, totem summoning, monster action-speed floors and the buff/debuff sources
+  (Tailwind, Harbinger, Temporal Chains) remain outside this slice; the full contract is
+  [#246](https://github.com/LocalExile/LocalExile/issues/246). Evidence: the client's Stats rows and PoE Wiki
+  [Action speed](https://www.poewiki.net/wiki/Action_speed),
+  [Projectile](https://www.poewiki.net/wiki/Projectile) and [Range](https://www.poewiki.net/wiki/Range); no live
+  native flight or stun-animation capture yet.
 - **Hit (reworked 2026-10-25).** `ProjectileFlight` advances from the
   connection's elapsed game clock, polled about every 16 ms. For each interval it solves the earliest intersection
   of the projectile segment and each living monster's observed movement segment in relative coordinates, with the

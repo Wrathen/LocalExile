@@ -11,6 +11,8 @@ static class GatewayProjectileDefaults
         new(metadata)
         {
             Speed = speed,
+            // One movement instance: the client's 15 m cap, tunable through the game-data setting.
+            Range = SystemSettings.Default.ProjectileMaximumRangeCells,
             Count = get("base_number_of_projectiles") is > 0 and var count ? count : 1,
             AimSpreadDistance = 40,
             SkipDeniedContacts = true,
