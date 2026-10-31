@@ -39,7 +39,7 @@ partial class Program
         if (target is not null)
         {
             if (use.SkillId != SkillCatalog.FirstSkillId) await CastOn(remote, stream, ciphers, conn, use, target, requestedAt);
-            else await Attack(remote, stream, ciphers, conn, use, target, requestedAt);
+            else if (target.Hostile) await Attack(remote, stream, ciphers, conn, use, target, requestedAt);   // not the player's own minion
             return;
         }
         // A self-cast skill (Righteous Fire) targets the player itself: echo it in place, then cast.

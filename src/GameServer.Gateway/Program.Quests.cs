@@ -250,17 +250,23 @@ partial class Program
         await Send(remote,stream,ciphers,InstanceProtocol.ActionStarted(PlayerId,here.X,here.Y,chest.X,chest.Y,use.SkillId,use.Sequence,use.Flags,targetObjectId:use.TargetId),null,still:()=>PlayerActionCurrent(conn,action));
         if(arrive>now) await Task.Delay(TimeSpan.FromSeconds(arrive-now));
         if(!PlayerActionCurrent(conn,action) || conn.Closed) return;
-        if(!GameServer.Core.World.PlayerWalk.InWalkUpRange(stop,(chest.X,chest.Y),1))
-        {
-            await Send(remote,stream,ciphers,InstanceProtocol.ActionEnded(PlayerId),null);
-            return;
-        }
-        CharacterSaves.ChangeTutorial(CharacterName(conn),t=>t with { ChestOpened=true });
-        await Send(remote,stream,ciphers,InstanceProtocol.RemoveObject(use.TargetId),null);
-        await Send(remote,stream,ciphers,InstanceEntities.CreateObject(use.TargetId,InstanceEntities.ObjectTypeHash(chest.Type),TutorialObjects.ChestBlob(chest,true)),"0x02b9 opened support gem chest");
-        await Send(remote,stream,ciphers,InstanceProtocol.EnterWakeZone(use.TargetId),null);
-        await DropTutorialGem(remote,stream,ciphers,conn,true,chest.X,chest.Y);
+        if(GameServer.Core.World.PlayerWalk.InWalkUpRange(stop,(chest.X,chest.Y),1))
+            await OpenTutorialChestCore(remote,stream,ciphers,conn,use.TargetId,chest);
         await Send(remote,stream,ciphers,InstanceProtocol.ActionEnded(PlayerId),null);
+    }
+
+    // The support gem chest opens (walked up to, or a warcry with open_nearby_chests_on_warcry): saved first, once.
+    static async Task<bool> OpenTutorialChestCore(string remote,NetworkStream stream,ConnectionCiphers ciphers,ClientState conn,uint id,TutorialObjects.Placement chest)
+    {
+        if(conn.Ruthless || CharacterSaves.Load(CharacterName(conn))?.Tutorial is not { ChestOpened:false }) return false;
+        // The walk-up and a warcry can both get here at once: only the first opens it.
+        if(Interlocked.Exchange(ref conn.TutorialChestOpening,1)==1) return false;
+        CharacterSaves.ChangeTutorial(CharacterName(conn),t=>t with { ChestOpened=true });
+        await Send(remote,stream,ciphers,InstanceProtocol.RemoveObject(id),null);
+        await Send(remote,stream,ciphers,InstanceEntities.CreateObject(id,InstanceEntities.ObjectTypeHash(chest.Type),TutorialObjects.ChestBlob(chest,true)),"0x02b9 opened support gem chest");
+        await Send(remote,stream,ciphers,InstanceProtocol.EnterWakeZone(id),null);
+        await DropTutorialGem(remote,stream,ciphers,conn,true,chest.X,chest.Y);
+        return true;
     }
 
     // Ids of the invisible SunkenPassageBlockers on the server's walk estimate (blockers only: the client spawns them).
@@ -422,24 +428,30 @@ partial class Program
             $"0x01ab player opens Rhoa Nest 0x{use.TargetId:x} from ({here.X}, {here.Y}): reached at ({stop.X}, {stop.Y}) in {arrive - now:0.00} s");
         if (arrive > now) await Task.Delay(TimeSpan.FromSeconds(arrive - now));
         if (conn.ActionCount != action || conn.Closed) return;
+        if (GameServer.Core.World.PlayerWalk.InWalkUpRange(stop, (at.X, at.Y), GlyphQuest.NestSize))
+            await OpenRhoaNestCore(remote, stream, ciphers, conn, use.TargetId, nest);
+        await Send(remote, stream, ciphers, InstanceProtocol.ActionEnded(PlayerId), null);
+    }
+
+    // A Rhoa Nest opens (walked up to, or a warcry with open_nearby_chests_on_warcry): once per instance.
+    static async Task<bool> OpenRhoaNestCore(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+        uint id, GlyphQuest.Nest nest)
+    {
+        var at = nest.At;
         int index = conn.Glyphs is { } layout ? layout.Nests.ToList().IndexOf(nest) : -1;
-        if (index < 0 || !GameServer.Core.World.PlayerWalk.InWalkUpRange(stop, (at.X, at.Y), GlyphQuest.NestSize) || !conn.Instance.OpenChest(at.X, at.Y))
-        {
-            await Send(remote, stream, ciphers, InstanceProtocol.ActionEnded(PlayerId), null);
-            return;
-        }
+        if (index < 0 || !conn.Instance.OpenChest(at.X, at.Y)) return false;
         // Chest has no update reader: the opened nest replaces the closed one, under its own id (the same id again made
         // the client log "Replacing awake object", live 2026-10-25).
         uint opened = OpenedNestFirstId + (uint)index;
-        lock (conn.GlyphNests) { conn.GlyphNests.Remove(use.TargetId); conn.GlyphNests[opened] = nest; }
-        conn.RemoveBlocker(use.TargetId);
+        lock (conn.GlyphNests) { conn.GlyphNests.Remove(id); conn.GlyphNests[opened] = nest; }
+        conn.RemoveBlocker(id);
         conn.SetBlocker(opened, at.X, at.Y, GlyphQuest.NestSize);
-        await Send(remote, stream, ciphers, InstanceProtocol.RemoveObject(use.TargetId), null);
+        await Send(remote, stream, ciphers, InstanceProtocol.RemoveObject(id), null);
         await Send(remote, stream, ciphers, InstanceEntities.CreateObject(opened, InstanceEntities.ObjectTypeHash(nest.Type), GlyphQuest.NestBlob(at, true)),
-            $"0x02b9 opened Rhoa Nest 0x{opened:x} (was 0x{use.TargetId:x})");
+            $"0x02b9 opened Rhoa Nest 0x{opened:x} (was 0x{id:x})");
         await Send(remote, stream, ciphers, InstanceProtocol.EnterWakeZone(opened), null);
         await DropGlyph(remote, stream, ciphers, conn, nest);
-        await Send(remote, stream, ciphers, InstanceProtocol.ActionEnded(PlayerId), null);
+        return true;
     }
 
     // A nest's glyph on the instance's ground, unless the glyphs are placed or a copy is carried, in the stash or on this

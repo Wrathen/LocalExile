@@ -72,6 +72,10 @@ How to regenerate them: [re/tooling.md](re/tooling.md) §7.
 | [game/maps.md](game/maps.md) | 3.29 maps and the Atlas: the 20 generic map bases, tiers, drops, Voidstones (rules to build to) |
 | [game/gambler.md](game/gambler.md) | Gambler node checklist, incoming elemental ailments and read-only opt-in |
 | [game/aristocrat.md](game/aristocrat.md) | Aristocrat node checklist: gem levels/quality, attribute requirements and conditional immunities |
+| [game/ancestral-commander.md](game/ancestral-commander.md) | Ancestral Commander node checklist: every node but Spirit of Rakiata has a consumer (Deathrattle, the strike nodes, the four Spirits and Forest of Ancestors partly); read-only opt-in |
+| [game/paladin.md](game/paladin.md) | Paladin node checklist: small nodes, stationary consecrated ground, Paladin Aura, enemy aura and taunt, relics, link skills and opt-in |
+| [game/polytheist.md](game/polytheist.md) | Polytheist node checklist: rings, legal builds, consumers, engine gaps and opt-in |
+| [game/surfcaster.md](game/surfcaster.md) | Surfcaster node checklist: fishing-rod crits and cast speed, Ghost of the Deep, reversed chill, monster ailments and flee |
 | [game/ascendancies.md](game/ascendancies.md) | selection, points, saves and the Phrecia play gate |
 | [game/antiquarian.md](game/antiquarian.md) | all nine node consumers, verified-graph admission, legal builds and native acceptance |
 | [game/unique-jewels.md](game/unique-jewels.md) | the 185 unique jewels, their effects and what the passive-socket server supports |

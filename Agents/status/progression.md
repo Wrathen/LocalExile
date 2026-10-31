@@ -196,6 +196,73 @@ Part of [Status](../Status.md); what to build next in this area is in
   conditional ailment immunity, lowest-attribute damage, granted passive points), with Gateway coverage of legal builds,
   paid refunds and reload. Not yet checked with the real client: that needs the reviewed combined graph installed.
   Docs: [Aristocrat checklist](../docs/game/aristocrat.md).
+- Ancestral Commander: the defensive nodes have server consumers (Armour and Life, Ancestral Endurance, Toughened
+  Skin's action/movement floors and doubled body armour, Ancestral Defiance), with Gateway coverage of legal builds,
+  the paid Ancestral Spirit choice refund and reload.
+  Call of the Ancestors speeds Enduring Cry's release and slows its one-use cooldown, which the record and the client
+  derive the same way; Deathrattle explodes and consumes the server's corpses and opens the quest chests at the release.
+  The explosion takes the player's global damage and conversion; Deathrattle is partial: no added damage, on-hit
+  effects or art, only Enduring Cry, and no chests beyond the quest ones.
+  Ancestral Reach's spirit strikes hit the monsters the client picks; Ancestral Echo strikes the previous location on
+  the server and sends the client the first location it needs to strike there too.
+  Neither acts for the Strike gems typed Projectile (Frost Blades, Lightning Strike, Molten Strike, Wild Strike and
+  their transfigured gems except Frost Blades of Katabasis): the server has no melee hit for them, though the client draws their spirit strikes.
+  Born under Fire converts nearby monsters' physical hits and puts its debuff on them.
+  Spirits of Kahuturoa, Utula and Kiloava trigger on a Unique's crit, Savage Hit or blocked hit, with the shared
+  cooldown and their Leadership buff (Kahuturoa's armour share and Kiloava's block recovery act; Utula's leech has no
+  leech to act on); each chieftain fights beside the player for the buff's duration, with its first skill only.
+  Server monsters have no base critical strike chance, so Kahuturoa triggers only on a Unique given an always-crit mod
+  through `/mob_mods`, never in normal play.
+  Forest of Ancestors' +1 totem and its 20% of hits from the nearest totem act on Rejuvenation Totems, the one totem
+  skill the server places; a totem killed while a Unique is near triggers Spirit of Kaom, whose Leadership adds 25%.
+  Not yet: Spirit of Rakiata (no Marks), monsters attacking totems and other totem skills.
+  `Game_VERIFIED_ANCESTRAL_COMMANDER=1` opts in; not yet checked with the real client.
+  Docs: [Ancestral Commander checklist](../docs/game/ancestral-commander.md).
+- Paladin: the nine small nodes (life regeneration, aura effect), Anointed Champion (consecrated ground while
+  stationary, its linger and 50% increased effect), the Paladin Aura options (granted level 30 Determination or Grace,
+  level 40 Discipline), Light of Divinity (nearby monsters take 25% increased elemental damage), Bring the Battle
+  (warcries taunt with infinite power; taunted monsters take 20% increased damage), Elemental Valiance (triggered
+  elemental relics that give their aura and explode, in Ruthless too), Absolution (40% aura effect while linked), Deep
+  Connections (links to the player's relics, +5 link gem levels) and Field Medicine (40% magic utility flask effect;
+  flasks on linked targets, whose movement speed a relic walks at) have server consumers, with Gateway coverage of
+  three legal builds, the Paladin Aura option swap, paid refunds and reload.
+  `Game_VERIFIED_PALADIN=1` opts in on the reviewed combined graph.
+  No consumer: curses, party allies, a death experience penalty, a linked minion's flask defences, and Bring the
+  Battle's less damage against other targets (monsters only hit the player).
+  Not applied: a linked minion's flask phasing, and flask damage on a relic's explosion (unverified).
+  Not yet checked with the real client. Docs: [Paladin checklist](../docs/game/paladin.md).
+- Polytheist: every node has a server consumer or a documented engine gap, with Gateway coverage of three legal
+  builds, paid refunds and reload.
+  The twelve small nodes (defences; light radius, which the client applies), Devout of the Brine King and Ralakesh's
+  minimum charges have consumers.
+  Devout of Garukhan (evasion and regeneration while moving, Unaffected by Shock) and Devout of Ryslatha (more maximum
+  attack damage, no regeneration on enemies hit recently) have consumers and Gateway coverage against a plain build.
+  So do Devout of Gruthkul (spells disabled and dealing no damage, life, regeneration, enemies that hit you attack
+  slower; whether their swing animation slows is unverified), Devout of Lunaris (Novas at the target, two more spell
+  projectiles, more spell area) and Devout of Solaris (a blind aura on nearby enemies, more critical chance against and
+  less damage from blinded enemies; their reduced critical chance has nothing to reduce, because monsters crit only
+  through `always_crit`, an override).
+  Devout of Abberath triggers Abberath's Fury on each footstep while walking (its radius comes from the explosion art
+  and is unverified), its hits ignite monsters, the client draws the burning hoofprints, and ignites on the player
+  deal nothing.
+  Devout of Yugul, Ralakesh's Corrupted Blood immunity and Garukhan's ground immunity wait for curses, reflected
+  damage, Corrupted Blood and hazardous ground.
+  `Game_VERIFIED_POLYTHEIST=1` opts in.
+  Not checked with the real client: that needs the reviewed combined graph installed.
+  Docs: [Polytheist checklist](../docs/game/polytheist.md).
+- Surfcaster: Baited Breath (every hit crits while holding a Fishing Rod), Screaming Reels (60% more cast speed with a
+  rod, in the server wait and the native clip), Sea Legs, Stormy Seas' conversion, Brine Bound's Cannot be Frozen and
+  the small nodes' cast speed have consumers, with Gateway coverage of legal builds, paid refunds and reload.
+  Ghost of the Deep's Torment Touched buff gives its four 23% bonuses and shows on the player.
+  Changing Seasons lets any hit chill the player and makes the chill increased action speed.
+  Stormy Seas' cold damage shocks monsters (the general monster chill/freeze/shock engine).
+  On that engine, Glacial Wave's chill raises the monster's damage taken and lessens its swings, Brine Bound freezes
+  monsters that hit you and holds every freeze for 1 s, and Within the Tempest shocks kills and spreads shocks 1.5 m.
+  The small nodes' chance to cause monsters to flee makes a hit monster walk away without attacking.
+  Not yet checked with the real client: that needs the reviewed combined graph installed.
+  Fishing (fish rarity, corrupted fish) has no gameplay in 3.29.3b.
+  `Game_VERIFIED_SURFCASTER=1` opts in.
+  Docs: [Surfcaster checklist](../docs/game/surfcaster.md).
 - Phrecia identities, graph ownership and the point/save lifecycle have automated coverage.
   Phrecia game connections/selection are gated by default; Antiquarian and Gambler have accepted opt-ins above.
   Normal startup does not install or recover a graph and ordinary/unascended play has no alternate-graph preflight.

@@ -147,17 +147,21 @@ public sealed class FlaskEffectScalingTests
         Assert.Equal(98, FlaskRecovery.For(type, item, local, Get, 900, 1000, 100).Life, 8);
     }
 
+    // A flask's Onslaught takes the flask's effect (wiki Silver Flask, Onslaught: since 3.20), added to the character's
+    // increased Onslaught effect; flags stay as they are.
     [Fact]
-    public void Level_scaled_effect_leaves_flags_and_independent_Onslaught_values_unscaled()
+    public void Level_scaled_effect_leaves_flags_and_scales_a_flask_Onslaught()
     {
         var catalog = Catalog(); var raw = Pair(catalog); raw["flask_effect_+%_per_level"] = 0;
         int Get(string name) => raw.GetValueOrDefault(name); // Controlled raw-coefficient replacement at actual100.
         var quartz = UtilityFlasks.For(catalog.UtilityFlaskOf(catalog.Find("Quartz Flask")!)!, Flask(catalog, "Quartz Flask"), new Dictionary<string, int>(), Get, 100);
         Assert.Contains(quartz.Stats, s => s.Stat == "phase_through_objects" && s.Value == 1);
         Assert.Contains(quartz.Stats, s => s.Stat == "base_spell_suppression_chance_%" && s.Value == 4);
-        var silver = UtilityFlasks.For(catalog.UtilityFlaskOf(catalog.Find("Silver Flask")!)!, Flask(catalog, "Silver Flask"), new Dictionary<string, int>(), Get, 100);
-        Assert.Contains(silver.Stats, s => s.Stat == "attack_speed_+%" && s.Value == 20);
-        Assert.Contains(silver.Stats, s => s.Stat == "base_cast_speed_+%" && s.Value == 20);
-        Assert.Contains(silver.Stats, s => s.Stat == "base_movement_velocity_+%" && s.Value == (20));
+        int[] Silver() => [.. new[] { "attack_speed_+%", "base_cast_speed_+%", "base_movement_velocity_+%" }.Select(name =>
+            UtilityFlasks.For(catalog.UtilityFlaskOf(catalog.Find("Silver Flask")!)!, Flask(catalog, "Silver Flask"),
+                new Dictionary<string, int>(), Get, 100).Stats.Single(s => s.Stat == name).Value)];
+        Assert.Equal([8, 8, 8], Silver()); // 20 × (1 − 60%)
+        raw["onslaught_effect_+%"] = 60;
+        Assert.Equal([20, 20, 20], Silver()); // 20 × (1 − 60% + 60%)
     }
 }

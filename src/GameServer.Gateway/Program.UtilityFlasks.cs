@@ -63,6 +63,7 @@ partial class Program
         foreach (var packet in UtilityFlasks.StartPackets(effect, PlayerId))
             await Send(remote, stream, ciphers, packet, $"0x01c1 player buff: {type.Name} (flask {slot}), {seconds:0.##} s");
         await MakeFlaskGrounds(remote, stream, ciphers, conn, type.Name, local, seconds);
+        await FlaskToLinkedTargets(remote, stream, ciphers, conn, flask.Item, local, utility, Get);
         await SendCharacterStats(remote, stream, ciphers, conn, $"{type.Name} on");
     }
 

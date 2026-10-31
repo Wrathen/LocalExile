@@ -127,7 +127,7 @@ partial class Program
             int priorContacts = conn.RecentEnemyHits.Count(conn.Clock.Elapsed.TotalSeconds);
             var stats = CharacterPlayerStats(conn);
             bool relevant = amount > 0 && (type == DamageType.Physical
-                || type == DamageType.Chaos && conn.Pools.ArmourAppliesToChaosDamage
+                || PlayerHitMitigation.ArmourPercent(conn.Pools, type, name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0) > 0
                     && DamageModel.Mitigate(amount, resistance, maxResistance) > 0);
             var armour = IncomingArmourLocked(conn, relevant, priorContacts, stats);
             return MitigateTakenWithArmour(conn, type, amount, resistance, maxResistance, armour.EffectiveArmour, stats);
@@ -140,7 +140,8 @@ partial class Program
         var reduction = PlayerDamageReduction(conn, stats);
         int resisted = type == DamageType.Physical ? amount : DamageModel.Mitigate(amount, resistance, maxResistance);
         return FortificationDamageTaken(conn, (int)Math.Round(PlayerHitMitigation.AfterResistance(conn.Pools, type, resisted,
-            reduction.Physical, reduction.Elemental, effectiveArmour)
+            reduction.Physical, reduction.Elemental, effectiveArmour,
+            PlayerHitMitigation.ArmourPercent(conn.Pools, type, name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0))
             * conn.ElementalAilments.DamageTakenFactor(conn.Clock.Elapsed.TotalSeconds)));
     }
 
@@ -151,34 +152,50 @@ partial class Program
         var (physical, elemental) = PlayerDamageReduction(conn, stats);
         if (type == DamageType.Physical)
             return $"{DamageModel.ArmourReduction(effectiveArmour, amount)}% armour" + (physical > 0 ? $" + {physical}% physical damage reduction" : "");
+        int share = PlayerHitMitigation.ArmourPercent(conn.Pools, type, name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0);
         return $"{DamageModel.Capped(resistance, maxResistance)}% resistance" +
-            (type == DamageType.Chaos && conn.Pools.ArmourAppliesToChaosDamage
-                ? $" + {DamageModel.ArmourReduction(effectiveArmour, DamageModel.Mitigate(amount, resistance, maxResistance))}% armour"
+            (share > 0
+                ? $" + {DamageModel.ArmourReduction((int)((long)effectiveArmour * share / 100), DamageModel.Mitigate(amount, resistance, maxResistance))}% armour"
                 : "") +
             (DamageTypes.IsElemental(type) && elemental > 0 ? $" + {elemental}% elemental damage reduction" : "");
     }
 
-    // Warcries that grant charges (CastGemSkill): Enduring Cry gives an Endurance Charge per 5 power
-    // (endurance_charge_granted_per_X_monster_power_during_endurance_warcry) of the hostile monsters within its radius
-    // (Path of Building: 60, grown by area of effect; power 1 normal, 2 magic, 10 rare, 20 unique), when its cast is over.
-    // True when the skill was one of these.
-    static bool UseChargeSkill(ClientState conn, int effect, int level, int quality, (int X, int Y) at)
-        => UseChargeSkillCore(conn, effect, SkillsFor(conn).EffectStats(effect, level, quality).ToDictionary(kv => kv.Item1, kv => kv.Item2));
+    // A warcry (CastGemSkill), when its cast is over: it taunts the hostile monsters within its radius (wiki Warcry: every
+    // warcry taunts, base radius 6 m, grown by area of effect; TauntLocked), and Enduring Cry gives an Endurance Charge per
+    // 5 power (endurance_charge_granted_per_X_monster_power_during_endurance_warcry) of the hostile monsters within it and
+    // its life regeneration (Path of Building: power 1 normal, 2 magic, 10 rare, 20 unique). warcries_have_infinite_power
+    // (Bring the Battle) makes the power 999999 (PoB CalcPerform's override): the charges reach their maximum and the
+    // regeneration its 25-power cap. Every warcry then runs the on-warcry effects (WarcryReleased). The other warcries'
+    // own buffs and exerted attacks are not modelled.
+    // True when the skill was a warcry.
+    static bool UseWarcryInstance(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn,
+        ushort skillId, int effect)
+        => SkillsFor(conn).IsWarcry(effect) && UseWarcry(remote, stream, ciphers, conn, effect, SupportedSkill(conn, skillId).Stats);
 
-    static bool UseChargeSkillInstance(ClientState conn, ushort skillId, int effect, int level, int quality, (int X, int Y) at)
-        => SkillsFor(conn).EffectId(effect) == "EnduringCry" && UseChargeSkillCore(conn, effect, SupportedSkill(conn, skillId).Stats);
+    const int InfiniteWarcryPower = 999999;
 
-    static bool UseChargeSkillCore(ClientState conn, int effect, IReadOnlyDictionary<uint, int> own)
+    // A warcry's use time (PoB CalcOffence calcWarcryCastTime): its cast time over warcry speed (the player's and the
+    // gem's) and action speed, at least a server tick. The client times the cry from the same warcry_speed_+% (0x141abcaa0).
+    internal static double WarcryCastSeconds(ClientState conn, int effect, IReadOnlyDictionary<uint, int> player,
+        IReadOnlyDictionary<uint, int> own)
     {
-        if (SkillsFor(conn).EffectId(effect) != "EnduringCry") return false;
+        long speed = Stats.Key("warcry_speed_+%") is uint key ? (long)player.GetValueOrDefault(key) + own.GetValueOrDefault(key) : 0;
+        return Math.Max(TickSeconds, SkillsFor(conn).CastTimeMs(effect) / 1000.0 / Math.Max(0.01, 1 + speed / 100.0) / PlayerActionFactor(conn));
+    }
+
+    static bool UseWarcry(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, int effect,
+        IReadOnlyDictionary<uint, int> own)
+    {
+        if (!SkillsFor(conn).IsWarcry(effect)) return false;
+        bool enduring = SkillsFor(conn).EffectId(effect) == "EnduringCry";
         int Own(string name) => Stats.Key(name) is uint key ? own.GetValueOrDefault(key) : 0;
         int per = Own("endurance_charge_granted_per_X_monster_power_during_endurance_warcry");
         // The warcry cannot be cancelled before its contact point (cannot_cancel_skill_before_contact_point), so a later
         // action does not stop it. Admission checks the actor restriction before this accepted release is scheduled;
-        // changing its source later does not cancel this continuation. Warcry speed is the player's and the gem's.
+        // changing its source later does not cancel this continuation. Warcry and action speed are taken at the use.
         var player = AreaPlayerStats(conn);
         int Player(string name) => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0;
-        double castSeconds = SkillsFor(conn).CastTimeMs(effect) / 1000.0 / Math.Max(0.01, 1 + (Player("warcry_speed_+%") + Own("warcry_speed_+%")) / 100.0);
+        double castSeconds = WarcryCastSeconds(conn, effect, player, own);
         double until = conn.Clock.Elapsed.TotalSeconds + castSeconds;
         int epoch = conn.ProjectileEpoch;
         double duration = SkillDurationModifiers.Seconds(Own("base_skill_effect_duration"), Player, Own);
@@ -188,16 +205,31 @@ partial class Program
             // The game clock: a pause holds the cry.
             while (!conn.Closed && conn.Clock.Elapsed.TotalSeconds < until) await Task.Delay(16);
             if (!conn.ProjectileActive(epoch) || conn.PlayerLife == 0) return;
+            double taunt = TauntSeconds(Player);
             foreach (var (k, v) in own) player[k] = v;
-            int radius = SkillArea.Radius(EnduringCryRadius, name => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0, spell: false);
+            int radius = SkillArea.Radius(WarcryRadius, name => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0, spell: false);
             double now = conn.Clock.Elapsed.TotalSeconds;
-            int power;
+            int power, taunted;
+            (int X, int Y) here;
             lock (conn.Monsters)
             {
                 if (!conn.ProjectileActive(epoch) || conn.PlayerLife == 0) return;
-                var here = conn.Walk.Position(now);
-                power = conn.Monsters.Values.Where(m => m.Hostile && !m.Dead && m.Life > 0 && Dist(m.Walk.Position(now), here) <= radius)
-                    .Sum(m => WarcryPower(m.Rarity));
+                here = conn.Walk.Position(now);
+                taunted = TauntLocked(conn, here, radius, now, taunt);
+                if (!enduring)
+                    Console.WriteLine($"[gateway] {SkillsFor(conn).EffectId(effect)}: taunts {taunted} monster(s) within {radius} cells for {taunt:0.##} s");
+            }
+            if (!enduring)
+            {
+                await WarcryReleased(remote, stream, ciphers, conn, here, radius, epoch);
+                return;
+            }
+            lock (conn.Monsters)
+            {
+                if (!conn.ProjectileActive(epoch) || conn.PlayerLife == 0) return;
+                power = Player("warcries_have_infinite_power") != 0 ? InfiniteWarcryPower
+                    : conn.Monsters.Values.Where(m => m.Hostile && !m.Dead && m.Life > 0 && Dist(m.Walk.Position(now), here) <= radius)
+                        .Sum(m => WarcryPower(m.Rarity));
                 // The target's stat description caps regeneration at 25 Power. Charge generation retains its own rule.
                 double percentPerMinute = Math.Min(25, power) / 5d
                     * Own("enduring_cry_life_regeneration_rate_per_minute_%_per_5_power_up_to_cap")
@@ -207,14 +239,15 @@ partial class Program
                     + $"{percentPerMinute:0.###}% Life/min (Whaletooth included)");
             }
             int charges = per > 0 ? power / per : 0;
-            Console.WriteLine($"[gateway] Enduring Cry: {power} power within {radius} cells, {charges} endurance charge(s)");
+            Console.WriteLine($"[gateway] Enduring Cry: {power} power within {radius} cells, {charges} endurance charge(s), {taunted} taunted");
             if (charges > 0) ChargesOf(conn).Enqueue(new ChargeEvent.Grant(ChargeType.Endurance, charges, $"Enduring Cry ({power} power)"));
+            await WarcryReleased(remote, stream, ciphers, conn, here, radius, epoch);
         });
         return true;
     }
 
-    // Path of Building's EnduringCry radius (skill("radius", 60)); one unit is one cell.
-    const int EnduringCryRadius = 60;
+    // A warcry's radius: the wiki's base 6 m, Path of Building's EnduringCry skill("radius", 60); one unit is one cell.
+    const int WarcryRadius = 60;
 
     // A monster's warcry power (Path of Building's ConfigOptions): normal 1, magic 2, rare 10, unique 20.
     internal static int WarcryPower(MonsterRarity rarity) => rarity switch

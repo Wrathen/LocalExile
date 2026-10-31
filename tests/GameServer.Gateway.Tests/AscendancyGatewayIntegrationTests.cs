@@ -133,6 +133,14 @@ public sealed partial class AscendancyGatewayIntegrationTests
         public PlayerInventories Items => PlayerInventories.For(Character, Program.Items);
         public AccountStash Stash => AccountStash.For(AccountStash.Key(State.Account ?? Character, State.League), Program.Items);
 
+        // Item activation reads the requirement attributes (socketed gems count, 19-gems.md): these meet any gem's.
+        public void MeetAttributeRequirements()
+        {
+            lock (State.Monsters)
+                foreach (string attribute in new[] { "strength", "dexterity", "intelligence" })
+                    State.PlayerStats[Program.Stats.Key($"virtual_{attribute}_for_requirements")!.Value] = 1000;
+        }
+
         static MethodInfo GatewayMethod(string name) => typeof(Program).GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
             .Single(m => m.Name == name || m.Name.Contains($"g__{name}|", StringComparison.Ordinal));
 
@@ -158,7 +166,7 @@ public sealed partial class AscendancyGatewayIntegrationTests
         public ClientState Reload()
         {
             var state = new ClientState(new(0, "AscendancyIntegration", 128, 128, 32, 32, null, []), 0, 1)
-            { Character = Character, ClassRow = _classRow, God = _god, Hardcore = _hardcore, Ruthless = _ruthless };
+            { Character = Character, ClassRow = _classRow, God = _god, Hardcore = _hardcore, Ruthless = _ruthless, Instance = new() };
             try { Load.Invoke(null, [state, 1]); }
             catch (TargetInvocationException e) when (e.InnerException is not null) { ExceptionDispatchInfo.Capture(e.InnerException).Throw(); }
             (state.PlayerLife, state.PlayerMana) = (state.Pools.Life, state.Pools.Mana);

@@ -140,6 +140,10 @@ the release point and their first move runs from there; the visual trails the si
 catches up at the stop. GGG's server sends no object for a player's bow shot, default attack or gem: the live client
 draws its own arrows, which fly about 308 cells/s after a release about 258 ms into the attack. It sends none for a
 Sand Spitter's mortar either ([port record](../dev/ranged-monster-actions-port.md), "Live reference").
+Here a gem use's primary projectiles get no object (`ProjectileOffense.ClientPredicted`): the client's projectile
+action makes them itself, Fireball's and Spark's alike ([protocol §10](../protocol/11-skills.md#10-projectiles-experimental)).
+The client still needs the skill's stats to draw them right: its sparks live `skill_effect_duration`, which the
+Gateway now sends with every gem skill that has a base duration.
 A flight that has already ended when its creation snapshot runs is still created when its stop keeps the object
 (impact clip, stuck arrow), so
 a short shot on a busy connection appears at its impact instead of not at all; other ended flights are skipped.

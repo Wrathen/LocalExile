@@ -31,9 +31,12 @@ public partial class SpellNoDamageTests
     }
 
     // A spell's projectiles are the client's own; an attack gem's are not (Frida 2026-10-31: Burning Arrow's action created
-    // no projectile, and without a server object none was seen).
+    // no projectile, and without a server object none was seen). Spark's action fires through the same native
+    // ProjectileAction method as Fireball's (vtable slot 0x618: 0x141bb13a0, Spark's 0x141b363a0 forwards to it), so the
+    // client draws Spark's sparks itself too.
     [Theory]
     [InlineData("Fireball", "Driftwood Wand", true)]
+    [InlineData("Spark", "Driftwood Wand", true)]
     [InlineData("BurningArrow", "Crude Bow", false)]
     public async Task Spell_gem_projectiles_are_client_predicted_and_attack_gem_projectiles_are_not(string skill, string weapon, bool predicted)
     {
@@ -46,5 +49,18 @@ public partial class SpellNoDamageTests
         var use = (GameServer.Core.Projectiles.ProjectileUse)Method("CaptureGemProjectile").Invoke(null,
             [f.Conn, runtime.Session, f.Skill, gems.Single(g => g.Id == f.Skill), (100, 32), roll])!;
         Assert.Equal(predicted, Assert.IsType<ProjectileOffense>(use.Payload).ClientPredicted);
+    }
+
+    // The client's Spark action gives each of its own sparks skill_effect_duration (0x168) / 1000 seconds of life
+    // (0x141b35b7a) and removes it when that runs out (0x141b36170): without the virtual stat every spark died on its
+    // first tick and none was drawn.
+    [Theory]
+    [InlineData(0, 2000)]
+    [InlineData(50, 3000)]
+    public void Spark_skill_carries_its_final_effect_duration(int increased, int expected)
+    {
+        using var f = new Fixture("Spark", "Driftwood Wand");
+        f.Set("skill_effect_duration_+%", increased);
+        Assert.Equal(expected, f.Panel()[Program.Stats.Key("skill_effect_duration")!.Value]);
     }
 }

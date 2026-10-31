@@ -115,11 +115,12 @@ static class AuraCatalog
                     evasion += Value(skills, stats, aura, "base_evasion_rating", auraEffectPct);
                     evasionMore += Value(skills, stats, aura, "grace_aura_evasion_rating_+%_final", auraEffectPct);
                     break;
-                case "Discipline":
-                    energyShield += Value(skills, stats, aura, "base_maximum_energy_shield", auraEffectPct);
-                    break;
                 case "Zealotry":
                     spellCrit += Value(skills, stats, aura, "spell_critical_strike_chance_+%", auraEffectPct);
+                    break;
+                case "Discipline":
+                    // Flat energy shield before the increases (PoB: a BASE mod); RawStats only publishes the raw stat.
+                    energyShield += Value(skills, stats, aura, "base_maximum_energy_shield", auraEffectPct);
                     break;
                 case "PurityOfElements":
                     int all = Value(skills, stats, aura, "base_resist_all_elements_%", auraEffectPct);

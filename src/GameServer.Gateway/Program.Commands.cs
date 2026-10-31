@@ -1154,11 +1154,12 @@ partial class Program
             }
             int monsterAccuracy = Monsters.BaseAccuracy(level) ?? 0;
             int monsterDamage = Monsters.BaseDamage(level) ?? 0;
-            int hitChance = DamageModel.AccuracyHitChance(conn.Pools.Evasion, monsterAccuracy);
+            int evasion = PlayerEvasion(conn, conn.Clock.Elapsed.TotalSeconds);
+            int hitChance = DamageModel.AccuracyHitChance(evasion, monsterAccuracy);
             int reduction = DamageModel.ArmourReduction(conn.Pools.Armour, monsterDamage);
             await conn.Commands!.Reply($"Armour {conn.Pools.Armour} ({conn.Pools.ArmourPct}% increased): " +
                 $"{reduction}% physical reduction against a level {level} monster hit ({monsterDamage}), " +
-                $"evasion {conn.Pools.Evasion} ({conn.Pools.EvasionPct}% increased): {100 - hitChance}% chance to evade " +
+                $"evasion {evasion} ({conn.Pools.EvasionPct}% increased): {100 - hitChance}% chance to evade " +
                 $"(monster accuracy {monsterAccuracy}, {hitChance}% chance to be hit).");
         })
         .Add("auras", "/auras (active auras, their reservation and the character's efficiency)", async _ =>

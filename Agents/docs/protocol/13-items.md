@@ -1216,7 +1216,8 @@ For example, a 6-second base with 30% local and 20% global duration lasts `6 * 1
 quality or local more modifiers. Quicksilver with only 20% quality remains 7.2 seconds in ordinary mode.
 The raw global sum includes the per-player-level source once and ignores the virtual display seed.
 Effect uses §8's raw flat-plus-player-level resolver, adding local effect and `magic_utility_flask_effect_+%` only
-on a magic utility flask. Onslaught keeps its own separate effect stat. Values use the existing PoB `ScaleAddMod`
+on a magic utility flask. A flask's Onslaught takes that effect too, added to the character's `onslaught_effect_+%`
+(wiki Silver Flask and Onslaught: flask effect applies to Onslaught a flask grants since 3.20). Values use the existing PoB `ScaleAddMod`
 rounding projection with final integer saturation; that representational guard is not an upper balance cap.
 Global duration, local duration and effect are distinct operations. The new per-level effect source does not establish
 all unique acquisition/conditional mechanics, native tooltip behavior or official fractional duration rounding.
@@ -1228,16 +1229,35 @@ ailment, stun and curse ones (avoid, reduced effect or duration on you, immuniti
 Ignite", stun recovery) reach the character panel only; life and energy shield leech are not applied (leech is not
 modelled).
 
+With `flasks_apply_to_your_linked_targets` (Paladin's Field Medicine), a non-unique utility flask also puts its buff
+and the Silver Flask's Onslaught (0x1c1, the player as source, the flask's duration) on each of the player's linked
+targets, and takes them off (0x1c2) when the effect ends or the target goes (`FlaskToLinkedTargets`,
+`LinkSkillsTick`). There its stats are scaled by the flask's own increased effect only, not by the player's "applied
+to you" `flask_effect_+%` and `magic_utility_flask_effect_+%` (Path of Building's `effectIncNonPlayer`). A minion
+target's walk takes their `base_movement_velocity_+%`: the server's speed and the client's `movement_velocity_+%`
+(0x1b3 on the minion) change together (`MinionFlaskSpeedLocked`). Their other stats have nothing to act on or are
+not applied ([Paladin](../game/paladin.md#link-skills)).
+
 **What some flasks make on use** (`FlaskGrounds.cs`, `Program.FlaskGrounds.cs`), from their implicit mods, where the
 player stands (radii in cells):
-- Stibnite (`local_smoke_ground_on_flask_use_radius` 16): a smoke cloud. Monsters standing in it are blinded (buff 179
-  `blinded`): 20% less accuracy against the player (`MonsterSwing`) and 20% less evasion against the player's attacks
+- Stibnite (`local_smoke_ground_on_flask_use_radius` 16): a smoke cloud. Hostile monsters standing in it (not the
+  player's minions) are blinded (buff 179 `blinded`): 20% less accuracy against the player (`MonsterSwing`) and 20% less evasion against the player's attacks
   (Path of Building's Blind; the tables have no default value for it). Live: Hillock's accuracy 14 → 11.
+  The same Blind as a passive's blind aura (`Program.Blinded`, [11](11-skills.md) §12); each keeps its own buff.
 - Sulphur (`local_consecrate_ground_on_flask_use_radius` 18): consecrated ground. Standing on it the player regenerates
   5% of maximum life per second (`life_regeneration_rate_per_minute_%` 300) and curses are 50% less effective (Path of
   Building; the stat's reminder text), with the `ground_consecration` buff (208) and the stats sent again.
-- Basalt (`local_flask_taunt_enemies_on_use_radius` 30): `taunted` (408) on the hostile monsters around for 3 s (the
-  reminder text); with one player that changes nothing else.
+  `consecrated_ground_effect_+%` raises both (PoB CalcPerform: 50% gives 450 and -75), and
+  `your_consecrated_ground_effect_lingers_for_ms_after_leaving_the_area` keeps the buff and stats for that long after
+  the last moment any of the player's grounds covered him (left, or the ground ended); a death ends it.
+- A stationary player with `consecrated_ground_while_stationary_radius` (or its Strength or Crusader variant, the
+  largest as the client's 0x1428d43a0) has one consecrated ground of that radius where he stands: made when his walk
+  ends, removed (0x2bb) when he walks, dies or is in a town. `RunPlayerTick` starts the ticker while the radius is set.
+- Basalt (`local_flask_taunt_enemies_on_use_radius` 30): taunts the hostile monsters around for 3 s (the reminder
+  text), through the player's shared taunt (`TauntLocked`, [11](11-skills.md) §12), which shows `taunted` (408).
+  Row 408 is IsRecovery, so its 0x1c1 carries `taunt_target_id` and `is_taunted`; the flask used to send it without
+  them, which the 0x1c1 reader (0x141fdf870) reads past the end of the message.
+  With one player, the taunt matters only for `taunted_enemies_damage_taken_+%` (Paladin's Bring the Battle).
 - Aquamarine's chilled ground (`local_flask_chilled_ground_on_flask_use_radius` 28) is not made: chilling monsters needs
   their slower walks and attacks to match on the client, which is not done. The ground shows the GroundEffects art
   (`ground_effects_v2/consecrated/consecrated_01.ao`, `smoke_blind/smoke_blind.ao`) as an effect object (`EffectObject`)

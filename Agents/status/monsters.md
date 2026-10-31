@@ -99,9 +99,24 @@ Part of [Status](../Status.md); what to build next in this area is in
   Six integrated native cases at source `dbfe717`, recorded by `53edc77`, cover ordinary alive/dead, Raised Zombie
   false, Hillock life 1, sinking and an owned Spectral Wolf forced false by that source's separate summon runtime.
   This branch preserves the ordinary flag math and fields; it has no independent native pass or owned-actor runtime.
-  The Core helper retains an optional owned guard; corpse identity, final-death registration and consumption remain open.
+  The Core helper retains an optional owned guard; corpse identity and final-death registration remain open.
+  Deathrattle's warcry explosion is the first consumer: a dead zero-Life eligible monster explodes once and is marked
+  `SpawnedMonster.CorpseConsumed` and removed ([11](../docs/protocol/11-skills.md) section 10i).
   Code: `MonsterLifeData.cs`, `MonsterObject`, `MonsterCatalog.cs`, `Program.Monsters.cs`, `ot_components.py`.
   Docs: [04](../docs/protocol/04-player-entity.md#44-life-0x141e6c2f0-55-bytes).
+- Player hits on monsters: each one records the time on the monster (`PlayerHitAt`), and the player's death clears it.
+  `enemy_life_regeneration_rate_+%_for_4_seconds_on_hit` (Devout of Ryslatha) scales a monster's regeneration for 4 s
+  after a hit.
+  Gateway coverage only; not checked with the real client.
+  Code: `Program.MonsterMods.cs`, `Program.Combat.cs`.
+  Docs: [14](../docs/protocol/14-monster-packs.md) §5, [Polytheist](../docs/game/polytheist.md).
+- Monster hits on the player: an attack that is neither evaded nor blocked records the time on the monster
+  (`HitPlayerAt`), and the player's death clears it.
+  For 4 s after it, the player's `enemies_that_hit_you_with_attack_recently_attack_speed_+%` (Devout of Gruthkul)
+  lengthens the monster's swings, and its attack stats are sent again on its Stats component.
+  Gateway coverage only; whether the client's swing animation follows those stats is not checked with the real client.
+  Code: `Program.Monsters.cs` (`MonsterSwingSeconds`, `SendAttackerSlows`), `MonsterMods.cs`.
+  Docs: [11](../docs/protocol/11-skills.md) §6, [Polytheist](../docs/game/polytheist.md).
 - Monster walk speed on the server includes the client's per-monster speed roll: Actor setup draws a uniform percent
   in the MonsterVarieties row's range (the Goatmen ±5 %, the 7.60–8.40 band measured live for a base of 8; most rows
   none) from a TinyMT32 state keyed by the object id and its type, and the walk estimate, swing range and contact
@@ -115,6 +130,12 @@ Part of [Status](../Status.md); what to build next in this area is in
   tests check it; live, the player was never evaded.
   Code: `MonsterMods.cs`.
   Docs: [14](../docs/protocol/14-monster-packs.md) §5.
+- Monster flee: a player hit with a chance to cause monsters to flee (Surfcaster's small nodes, Chance to Flee Support)
+  makes a living monster walk to a floor cell 5 m away from the player and not attack until that walk ends.
+  Magic monsters avoid half of the flees and rare and unique ones all, through their rarity's own mods.
+  Only the Gateway tests check it; the distance and the action the real server walks it with are not verified.
+  Code: `MonsterFlee.cs`, `Program.MonsterAilments.cs`, `Program.Monsters.cs`.
+  Docs: [11](../docs/protocol/11-skills.md) §6, [Surfcaster](../docs/game/surfcaster.md).
 
 ## Not working yet
 

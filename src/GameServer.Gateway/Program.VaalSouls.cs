@@ -39,7 +39,8 @@ partial class Program
             var player = CharacterPlayerStats(conn);
             var requirements = CurrentGemRequirements(conn);
             var sources = new List<(uint, uint)>();
-            foreach (var gem in GemSkillEffectsAt(conn.Character, requirements.Places, requirements.Inactive, conn.Ruthless))
+            foreach (var gem in GemSkillEffectsAt(conn.Character, requirements.Places, requirements.Inactive, conn.Ruthless,
+                GrantedSkillsOf(conn)))
             {
                 if (SkillsFor(conn).VaalBudget(gem.Effect, gem.Level) is null) continue;
                 var supported = SupportedSkillAt(conn, gem.Id, requirements);

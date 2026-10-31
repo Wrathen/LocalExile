@@ -133,6 +133,8 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
             Put("hundred_times_casts_per_second", (int)Math.Round(100_000.0 / e.CastTime));
         }
         if (gepl >= 0 && t.ManaCost[gepl] > 0) { Put("base_mana_cost", t.ManaCost[gepl]); Put("mana_cost", t.ManaCost[gepl]); }
+        // A cost over time (the link gems' "Mana per second"): CostTypes 7 ManaPerMinute.
+        if (gepl >= 0 && t.ManaPerMinute[gepl] > 0) { Put("base_mana_cost_per_minute", t.ManaPerMinute[gepl]); Put("mana_cost_per_minute", t.ManaPerMinute[gepl]); }
         // A skill with a cooldown (GEPL Cooldown, e.g. Haste's 1200 ms): the client keeps the cooldown only when the skill
         // has uses (virtual_total_cooldown_count, GEPL StoredUses) and a duration in its record (GrantedSkill.CooldownMs).
         // An instant skill (ActiveSkillType Instant: Haste, Righteous Fire) is one by its stat: the client reads
@@ -149,6 +151,9 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
         // CharacterPanelStats gates spell rows on this final flag and hides the weapon rows while it is set.
         // A non-attack is not necessarily a spell (warcries, for example); use the actual ActiveSkillType.
         Put("casting_spell", IsSpell(effectRow) && !IsAttack(effectRow) ? 1 : 0);
+        // The Nova type's flag. The client casts a Nova at the cursor only when this, casting_spell and the caster's
+        // nova_spells_cast_at_target_location are all set (FUN_142896650); otherwise it stays around the caster.
+        if (IsNova(effectRow)) Put("skill_is_nova_skill", 1);
         // ActiveSkillType Brand's FlagStat is skill_is_brand_skill. It belongs to this selected skill, not the actor.
         Put("skill_is_brand_skill", IsBrand(effectRow) ? 1 : 0);
         if (gepl >= 0 && t.Cooldowns[gepl] is { Ms: > 0, Uses: > 0 } cooldown)
@@ -316,6 +321,10 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     public string? EffectId(int effectRow) =>
         _tables.Value?.EffectRows.FirstOrDefault(kv => kv.Value.Row == effectRow).Key;
 
+    /// <summary>A GrantedEffectsPerLevel row's GrantedEffects row and level, or null.</summary>
+    public (int Effect, int Level)? EffectsPerLevel(int row) =>
+        _tables.Value is { } t && row >= 0 && row < t.PerLevel.Count ? t.PerLevel[row] : null;
+
     /// <summary>A GrantedEffects row by its Id, or -1.</summary>
     public int EffectRow(string effectId) =>
         _tables.Value is { } t && t.EffectRows.TryGetValue(effectId, out var effect)
@@ -427,6 +436,23 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     /// <summary>Whether a GrantedEffects row's ActiveSkill has the Warcry type.</summary>
     public bool IsWarcry(int effectRow) => _warcryEffects.Value.Contains(effectRow);
 
+    /// <summary>A Strike skill: ActiveSkillType MeleeSingleTarget, whose FlagStat is <c>skill_is_strike_skill</c>, the
+    /// stat the client's own strike virtuals test (<c>0x142896310</c>, <c>0x1428b12d0</c>). The default attack is one
+    /// (PoB's Default Attack has MeleeSingleTarget too).</summary>
+    public bool IsStrike(int effectRow) => _strikeEffects.Value.Contains(effectRow);
+
+    /// <summary>ActiveSkillType Vaal (FlagStat <c>skill_is_vaal_skill</c>).</summary>
+    public bool IsVaal(int effectRow) => _vaalEffects.Value.Contains(effectRow);
+
+    /// <summary>A Nova skill (ActiveSkillType Nova: Ice Nova, Discharge, Shock Nova, but also Shockwave Totem and
+    /// Stormblast Mine).</summary>
+    public bool IsNova(int effectRow) => _novaEffects.Value.Contains(effectRow);
+
+    /// <summary>A self-targeted skill (ActiveSkillTargetTypes 4 or 10: Ice Nova, Discharge, Vaal Cold Snap), whose use
+    /// the client centres on the caster (FUN_14193e290). Totems, mines and traps are left out: their effect goes off at
+    /// the object they place.</summary>
+    public bool IsSelfTargeted(int effectRow) => _selfTargetedEffects.Value.Contains(effectRow);
+
     /// <summary>Aura metadata, including only supports already accepted by GemSupports.Resolve.</summary>
     public bool IsAura(int effectRow, IEnumerable<int>? acceptedSupports = null) =>
         _auraEffects.Value.Contains(effectRow)
@@ -441,6 +467,15 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     private readonly Lazy<HashSet<int>> _spellEffects = new(() => EffectsOfType(folder, "Spell"));
     private readonly Lazy<HashSet<int>> _projectileEffects = new(() => EffectsOfType(folder, "Projectile"));
     private readonly Lazy<HashSet<int>> _warcryEffects = new(() => EffectsOfType(folder, "Warcry"));
+    private readonly Lazy<HashSet<int>> _strikeEffects = new(() => EffectsOfType(folder, "MeleeSingleTarget"));
+    private readonly Lazy<HashSet<int>> _vaalEffects = new(() => EffectsOfType(folder, "Vaal"));
+    private readonly Lazy<HashSet<int>> _novaEffects = new(() => EffectsOfType(folder, "Nova"));
+    private readonly Lazy<HashSet<int>> _selfTargetedEffects = new(() =>
+    {
+        var self = EffectsOfTargetType(folder, 4, 10);
+        foreach (string placed in new[] { "SummonsTotem", "RemoteMined", "Trapped" }) self.ExceptWith(EffectsOfType(folder, placed));
+        return self;
+    });
     private readonly Lazy<HashSet<int>> _auraEffects = new(() => EffectsOfType(folder, "Aura"));
     private readonly Lazy<HashSet<int>> _curseEffects = new(() => EffectsOfType(folder, "AppliesCurse"));
     private readonly Lazy<HashSet<int>> _addedAuraEffects = new(() => EffectsOfType(folder, "Aura", added: true));
@@ -471,6 +506,22 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
         using var effects = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
         return [.. effects.RootElement.EnumerateArray().Select((r, i) => (r, i))
             .Where(e => e.r.TryGetProperty("ActiveSkill", out var a) && a.ValueKind == JsonValueKind.Number && instantSkills.Contains(a.GetInt32()))
+            .Select(e => e.i)];
+    }
+
+    /// <summary>The GrantedEffects rows whose ActiveSkill has one of these ActiveSkillTargetTypes.</summary>
+    static HashSet<int> EffectsOfTargetType(string folder, params int[] targetTypes)
+    {
+        string TablePath(string name) => Path.Combine(folder, "tables", name + ".json");
+        if (!File.Exists(TablePath("GrantedEffects")) || !File.Exists(TablePath("ActiveSkills"))) return [];
+        using var active = JsonDocument.Parse(File.ReadAllBytes(TablePath("ActiveSkills")));
+        var skills = active.RootElement.EnumerateArray().Select((r, i) => (r, i))
+            .Where(a => a.r.TryGetProperty("ActiveSkillTargetTypes", out var t) && t.ValueKind == JsonValueKind.Array
+                && t.EnumerateArray().Any(v => v.ValueKind == JsonValueKind.Number && targetTypes.Contains(v.GetInt32())))
+            .Select(a => a.i).ToHashSet();
+        using var effects = JsonDocument.Parse(File.ReadAllBytes(TablePath("GrantedEffects")));
+        return [.. effects.RootElement.EnumerateArray().Select((r, i) => (r, i))
+            .Where(e => e.r.TryGetProperty("ActiveSkill", out var a) && a.ValueKind == JsonValueKind.Number && skills.Contains(a.GetInt32()))
             .Select(e => e.i)];
     }
 
@@ -977,7 +1028,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
     // StatSetBase: per GrantedEffectStatSets row its ImplicitStats and (ConstantStats, ConstantStatsValues).
     // StatSetLevelStats: per GESSPL row its (FloatStats, BaseResolvedValues) and (AdditionalStats, AdditionalStatsValues).
     // Effectiveness: resolved permyriad, 10000 + the GESSPL DamageEffectiveness offset; 0 for missing data.
-    // ManaCost: per GEPL row the CostAmounts entry of CostTypes 0 (mana), else 0.
+    // ManaCost: per GEPL row the CostAmounts entry of CostTypes 0 (mana), else 0; ManaPerMinute the same of CostTypes 7.
     // Reservations: per GEPL row the ManaReservationFlat and ManaReservationPercent (permyriad), parallel to PerLevel.
     // Cooldowns: per GEPL row its Cooldown (ms) and StoredUses, parallel to PerLevel. VaalSouls: per GEPL row its VaalSouls.
     // Quality: per GrantedEffects row its (quality stat, permille).
@@ -987,7 +1038,8 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
         List<(int, int)[]> StatSetLevelStats, List<(int StatSet, int GemLevel, int PlayerLevelReq)> GemLevelReqs, List<int> ManaCost,
         List<(int ManaFlat, int ManaPercent, int LifeFlat, int LifePercent)> Reservations, List<(int Ms, int Uses)> Cooldowns,
         List<int> VaalSouls, List<int> VaalStoredUses, List<int?> ActiveSkills,
-        Dictionary<int, (int, int)[]> Quality, List<int> Effectiveness, List<int?> SpellCritChances, List<int> AttackSpeedMultipliers)
+        Dictionary<int, (int, int)[]> Quality, List<int> Effectiveness, List<int?> SpellCritChances, List<int> AttackSpeedMultipliers,
+        List<int> ManaPerMinute)
     {
         // GemLevelReqs by stat set: every gem's requirement check (twice per linked gem per skill build) scanned the whole
         // table before.
@@ -1042,6 +1094,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
             }
             var perLevel = new List<(int, int)>();
             var mana = new List<int>();
+            var manaPerMinute = new List<int>();
             var reservations = new List<(int ManaFlat, int ManaPercent, int LifeFlat, int LifePercent)>();
             var cooldowns = new List<(int, int)>();
             var vaalSouls = new List<int>();
@@ -1053,6 +1106,8 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
                 int[] types = Ints(r, "CostTypes"), amounts = Ints(r, "CostAmounts");
                 int i = Array.IndexOf(types, 0);
                 mana.Add(i >= 0 && i < amounts.Length ? amounts[i] : 0);
+                int m = Array.IndexOf(types, 7);
+                manaPerMinute.Add(m >= 0 && m < amounts.Length ? amounts[m] : 0);
                 reservations.Add((Math.Max(0, Int(r, "ManaReservationFlat")), Math.Max(0, Int(r, "ManaReservationPercent")),
                     Math.Max(0, Int(r, "LifeReservationFlat")), Math.Max(0, Int(r, "LifeReservationPercent"))));
                 cooldowns.Add((Math.Max(0, Int(r, "Cooldown")), Math.Max(0, Int(r, "StoredUses"))));
@@ -1087,7 +1142,7 @@ sealed class SkillCatalog(string folder = "data", bool ruthless = false)
                 if (Int(r, "PlayerLevelReq") is >= 0 and var req) levelReqs.Add((Int(r, "StatSet"), Int(r, "GemLevel"), req));
             }
             return new Tables(effects, statSets, perLevel, setLevels, effectInfo, baseStats, levelStats, levelReqs, mana, reservations, cooldowns,
-                vaalSouls, vaalStoredUses, activeSkills, quality, effectiveness, spellCritChances, attackSpeedMultipliers);
+                vaalSouls, vaalStoredUses, activeSkills, quality, effectiveness, spellCritChances, attackSpeedMultipliers, manaPerMinute);
         }
     }
 }

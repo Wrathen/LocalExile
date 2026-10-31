@@ -193,8 +193,11 @@ static class UtilityFlasks
                 : ActorScale.IsInput(s.Stat)
                     ? (int)Math.Clamp(Math.Truncate(Math.Round(s.Value * effect, 2)), int.MinValue, int.MaxValue)
                     : Scale(s.Value, effect)))];
-        // Onslaught has its own effect stat (onslaught_effect_+%), not the flask's.
-        if (u.Extra is { } x) stats.AddRange(x.Stats.Where(s => Applies(s.Stat)).Select(s => new Source($"buff {x.BuffRow}", s.Stat, s.Value)));
+        // A flask's Onslaught scales with the flask's effect modifiers (wiki Silver Flask, Onslaught: since 3.20 Onslaught is
+        // a buff and flask effect applies when a flask grants it), added to the character's increased Onslaught effect.
+        double onslaughtEffect = effect + character("onslaught_effect_+%") / 100.0;
+        if (u.Extra is { } x) stats.AddRange(x.Stats.Where(s => Applies(s.Stat))
+            .Select(s => new Source($"buff {x.BuffRow}", s.Stat, Scale(s.Value, onslaughtEffect))));
         // The flask's "during effect" mods, scaled by increased effect too (poewiki, Quality: increased flask effect
         // improves "any of the mods that the flask has rolled"); flags stay as they are.
         foreach (var (localStat, stat, sign, flag) in DuringEffect)

@@ -107,8 +107,9 @@ static class DamageStats
     }
 
     /// <summary>Conversion for a hit. <paramref name="attack"/> selects the attack-only stats; spells use the spell
-    /// stats instead. Conditional stats (while affected by an aura, against a frozen enemy, …) are ignored.</summary>
-    public static DamageConversion Conversion(IReadOnlyDictionary<uint, int> stats, StatCatalog catalog, bool attack)
+    /// stats instead, and a hit that is neither (an explosion, null) only the global ones. Conditional stats (while affected
+    /// by an aura, against a frozen enemy, …) are ignored.</summary>
+    public static DamageConversion Conversion(IReadOnlyDictionary<uint, int> stats, StatCatalog catalog, bool? attack)
     {
         var conversion = new DamageConversion();
         int Get(string name) => catalog.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
@@ -138,11 +139,11 @@ static class DamageStats
                 Add($"{source}_damage_%_to_convert_to_{target}", from, to);
                 Add($"base_{source}_damage_%_to_convert_to_{target}", from, to);
                 Add($"skill_{source}_damage_%_to_convert_to_{target}", from, to, skill: true);
-                Add($"{(attack ? "attack" : "spell")}_{source}_damage_%_to_convert_to_{target}", from, to);
+                if (attack is bool a) Add($"{(a ? "attack" : "spell")}_{source}_damage_%_to_convert_to_{target}", from, to);
                 Gain($"{source}_damage_%_to_add_as_{target}", from, to);
                 Gain($"skill_{source}_damage_%_to_add_as_{target}", from, to);
-                if (from == DamageType.Physical)
-                    Gain($"{(attack ? "attack" : "spell")}_physical_damage_%_to_add_as_{target}", from, to);
+                if (from == DamageType.Physical && attack is bool b)
+                    Gain($"{(b ? "attack" : "spell")}_physical_damage_%_to_add_as_{target}", from, to);
             }
         }
 

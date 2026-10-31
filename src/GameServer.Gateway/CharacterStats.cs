@@ -46,12 +46,20 @@ static class CharacterStats
         int AuraEffectPct = 0, int AuraAreaPct = 0, uint EnergyShield = 0,
         int ColdOvercapEvasionPct = 0, int LightningOvercapCritPct = 0,
         int SpellSuppressionWhileFullEnergyShield = 0, int? SpellSuppressionChanceUncapped = null,
-        bool ArmourAppliesToChaosDamage = false, uint Ward = 0)
+        bool ArmourAppliesToChaosDamage = false, uint Ward = 0,
+        // The rating while the player moves, when a "while moving" increase exists (null: the same as Evasion).
+        int? EvasionWhileMoving = null)
     {
         // Identifies the transient source snapshot used by this immutable pool calculation, including with-clones.
         internal long FortificationRevision { get; init; }
         // Calculated zero attributes are valid; legacy partial pool records may still need class defaults.
         internal bool AttributesResolved { get; init; }
+        // Player stats that monster swings, player ticks, regeneration steps and sweeps read for every character: resolved
+        // once per pool build (BuildPoolsFor), never a full stat build on those paths. 0/false: the character has none.
+        internal int AttackerSlowPct { get; init; }
+        internal int EnemyRegenerationOnHitPct { get; init; }
+        internal int VsBlindedCriticalPct { get; init; }
+        internal bool WhileMovingStats { get; init; }
         // Real pool builds retain the signed base before the one final floor; legacy partial pools use their rating.
         internal long AccuracyBase { get; init; } = Accuracy;
     }
@@ -103,7 +111,7 @@ static class CharacterStats
         int EnergyShieldPctPerTenStrength = 0, int EvasionPctPerTenIntelligence = 0,
         bool NoLifeFromStrength = false, bool NoManaFromIntelligence = false,
         bool NoStrengthBonuses = false, bool NoDexterityBonuses = false, bool NoIntelligenceBonuses = false,
-        bool MentalConditioning = false, decimal Ward = 0, int WardPct = 0)
+        bool MentalConditioning = false, decimal Ward = 0, int WardPct = 0, int EvasionWhileMovingPct = 0)
     {
         public static readonly Bonus None = new();
     }
@@ -219,6 +227,11 @@ static class CharacterStats
         decimal evasionBase = BaseEvasion + b.Evasion;
         decimal evasionValue = More(Increased(evasionBase, b.ShieldEvasion, b.BodyEvasion, totalEvasionPct,
             (long)b.ShieldEvasionPct + b.SharedShieldDefencesPct), b.EvasionMorePct);
+        // "Increased evasion while moving" joins the same increased bucket while the condition holds (PoB Condition Moving).
+        // shortcut: Iron Reflexes' converted armour does not get it; upgrade when armour reads a moving condition.
+        int? evasionWhileMoving = b.EvasionWhileMovingPct == 0 || b.IronReflexes ? null
+            : Rating(More(Increased(evasionBase, b.ShieldEvasion, b.BodyEvasion, totalEvasionPct + b.EvasionWhileMovingPct,
+                (long)b.ShieldEvasionPct + b.SharedShieldDefencesPct), b.EvasionMorePct));
         if (b.IronReflexes)
         {
             // Iron Reflexes converts all evasion rating to armour and removes dexterity's evasion bonus. The converted
@@ -303,7 +316,8 @@ static class CharacterStats
             LifeReservationEfficiencyPct: b.LifeReservationEfficiencyPct,
             AuraEffectPct: b.AuraEffectPct, AuraAreaPct: b.AuraAreaPct,
             ColdOvercapEvasionPct: b.ColdOvercapEvasionPct, LightningOvercapCritPct: b.LightningOvercapCritPct,
-            ArmourAppliesToChaosDamage: b.ArmourAppliesToChaosDamage, Ward: WardState.Max(b.Ward, b.WardPct))
+            ArmourAppliesToChaosDamage: b.ArmourAppliesToChaosDamage, Ward: WardState.Max(b.Ward, b.WardPct),
+            EvasionWhileMoving: evasionWhileMoving)
             { AttributesResolved = true, AccuracyBase = accuracyBase };
     }
 

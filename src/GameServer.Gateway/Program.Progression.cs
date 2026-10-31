@@ -114,7 +114,7 @@ partial class Program
                         string.Join(", ", worn.Where(w => inactive.Contains(w.Id)).Select(w =>
                             $"{w.Id} {ItemsFor(conn).ByHash(w.Item.TypeHash)?.Name} (str {w.Strength}, dex {w.Dexterity}, int {w.Intelligence}, level {w.Level})")));
             }
-        return (WithStolenMods(conn, WithAntiquarian(conn, WithFortification(conn, WithCharges(conn, sources)))), attributes);
+        return (WithLinks(conn, WithStolenMods(conn, WithAntiquarian(conn, WithFortification(conn, WithCharges(conn, sources))))), attributes);
     }
 
     // Shared equipment/passive resolver. The requirement snapshot uses this without publishing caches or pools.
@@ -409,6 +409,8 @@ partial class Program
                         meleeAttributes += RadiusJewelCatalogue.MeleeAttributes(stats);
         if (meleeAttributes != 0 && Stats.Key("melee_physical_damage_+%") is uint meleeKey)
             passives[meleeKey] = passives.GetValueOrDefault(meleeKey) + meleeAttributes / 5;
+        // The allocated passives' self buffs (PassiveBuffAuras) add their stats like the passives themselves.
+        PassiveBuffAuras.WithSelfBuffs(passives, nodes, conn.Ruthless);
         // Only attributes need a wide source view. Keep each raw key until overrides have replaced its entire total.
         var passiveAttributes = new Dictionary<string, long>();
         foreach (ushort node in nodes)
@@ -603,6 +605,9 @@ partial class Program
         if (Stats.Key(PlayerHitMitigation.ArmourAppliesToChaos) is uint chaosArmour
             && devStats.TryGetValue(chaosArmour, out int chaosArmourOverride))
             bonus = bonus with { ArmourAppliesToChaosDamage = chaosArmourOverride != 0 };
+        if (Stats.Key("damage_reduction_rating_from_body_armour_doubled") is uint doubled
+            && devStats.TryGetValue(doubled, out int doubledOverride))
+            bonus = bonus with { DoubleBodyArmour = doubledOverride != 0 };
         if (Stats.Key(PowerOfPurpose.RawFlag) is uint mentalConditioning
             && devStats.TryGetValue(mentalConditioning, out int flag))
             bonus = bonus with { MentalConditioning = flag != 0 };
@@ -659,6 +664,10 @@ partial class Program
         int MagebloodGet(string name) => Stats.Key(name) is uint k
             ? devStats.TryGetValue(k, out int value) ? value : sources.GetValueOrDefault(k) : 0;
         bonus = UtilityFlasks.Apply(bonus, UtilityStats(conn, MagebloodGet, level));
+        // "Movement Speed cannot be modified to below Base Value" (PoB CalcDefence: max(mod, 1)). The client bounds
+        // movement_velocity_+% below by 0 instead of -100 from the same raw flag (0x14251cbd0).
+        if (EquipmentInput("movement_speed_cannot_be_reduced_below_base") != 0)
+            bonus = bonus with { MovementVelocityPct = Math.Max(0, bonus.MovementVelocityPct) };
         if (conn.God)
             bonus = bonus with { Strength = bonus.Strength + 1000, Dexterity = bonus.Dexterity + 1000, Intelligence = bonus.Intelligence + 1000,
                 Life = bonus.Life + 10_000, AttackSpeedPct = bonus.AttackSpeedPct + 1000 };
@@ -685,10 +694,11 @@ partial class Program
             // A pure base stat takes its place before the global increases: the weapon override (Slayer Overwhelm,
             // Blind Prophet's Sightless) replaces the armed weapon's base, already with its local mods, and unarmed
             // melee uses its own Behemoth base. Neither base is a spell value; the spell route stays on SpellCriticalStrike.
-            AttackCriticalStrikeChance = AttackBaseCriticalStrike.Chance(!activeWeapon.Unarmed,
-                activeWeapon.Critical, pools.CriticalStrikeChancePct, RawCritical),
-            SpellCriticalStrikeChance = SpellCriticalStrike.Chance(DamageModel.BaseSpellCriticalStrikeChancePerMyriad,
-                RawCritical, playerIncrease: pools.SpellCriticalStrikeChancePct)
+            AttackCriticalStrikeChance = DisplayedCriticalChance(conn, AttackBaseCriticalStrike.Chance(!activeWeapon.Unarmed,
+                activeWeapon.Critical, pools.CriticalStrikeChancePct, RawCritical), RawCritical),
+            SpellCriticalStrikeChance = DisplayedCriticalChance(conn, SpellCriticalStrike.Chance(
+                DamageModel.BaseSpellCriticalStrikeChancePerMyriad, RawCritical,
+                playerIncrease: pools.SpellCriticalStrikeChancePct), RawCritical)
         };
         // Only the active usable shield contributes. The alternate set and unmet requirements cannot grant block.
         int shieldBlock = ActiveOffHand(conn) is { Type.Class: "Shield" } shield
@@ -727,7 +737,12 @@ partial class Program
         conn.Ward.SetMaximum(conn.PlayerLife > 0 ? pools.Ward : 0);
         conn.AppliedAdrenaline = conn.Antiquarian.Adrenaline(conn.Clock.Elapsed.TotalSeconds);
         ConfigureFortificationRecovery(conn, pools.Life, sources);
-        return pools with { FortificationRevision = FortificationOf(conn).Revision };
+        return pools with
+        {
+            FortificationRevision = FortificationOf(conn).Revision,
+            AttackerSlowPct = EquipmentInput(AttackerSlow), EnemyRegenerationOnHitPct = EquipmentInput(EnemyRegenerationOnHit),
+            VsBlindedCriticalPct = EquipmentInput(VsBlindedCriticalStat), WhileMovingStats = WhileMovingInputs.Any(n => EquipmentInput(n) != 0),
+        };
     }
 
     // What the allocated passives add to the pools: attributes (base_* and additional_*, all attributes and the pairs),
@@ -818,8 +833,10 @@ partial class Program
             + Get("mana_reservation_efficiency_+%") + Get("reservation_efficiency_+%");
         int lifeReservation = Get("base_life_reservation_efficiency_+%") + Get("base_reservation_efficiency_+%")
             + Get("life_reservation_efficiency_+%") + Get("reservation_efficiency_+%");
+        // Absolution's increase counts while the player has a linked target, as the client's 0x142822db0 adds it.
         int auraEffect = Get("non_curse_aura_effect_+%") + Get("aura_effect_+%")
-            + Get("aura_effect_on_self_from_your_skills_+%");
+            + Get("aura_effect_on_self_from_your_skills_+%")
+            + (Get("number_of_active_links") > 0 ? Get("non_curse_aura_effect_+%_while_linked") : 0);
         int auraArea = Get("base_aura_area_of_effect_+%");
         // Defences: the tree's flat armour/evasion and their increased modifiers. "Defences" and the combined armour and
         // evasion increase apply to both ratings, as in PoB's calcLib.mod.
@@ -846,6 +863,7 @@ partial class Program
             NoIntelligenceBonuses: Get(InherentAttributeBonuses.NoIntelligenceBonuses) != 0,
             Armour: Get("base_physical_damage_reduction_rating"), ArmourPct: armourPct,
             Evasion: Get("base_evasion_rating"), EvasionPct: evasionPct,
+            EvasionWhileMovingPct: Get("evasion_rating_+%_while_moving"),
             EvasionPctPerTenIntelligence: Get(AttributeDefenceSources.EvasionPerTenIntelligence),
             SharedDefencesPct: defencesPct, IronReflexes: Get("keystone_iron_reflexes") != 0,
             MentalConditioning: Get(PowerOfPurpose.RawFlag) != 0,
@@ -1222,8 +1240,9 @@ partial class Program
                 conn.MasteryEffects = effectsNow;
                 conn.RefundPoints = refundsNow;
                 conn.SavedPassiveProgress = new(conn.MainAscendancy, now, effectsNow, refundsNow);
-                conn.Pools = PoolsFor(conn, conn.Pools.Level);
-                conn.ApplyMovementSpeed();
+                // Also reconciles the ailments on the player with the new stats: a gained or refunded action-speed floor,
+                // Changing Seasons reversing a running chill.
+                RecomputePoolsAndSpeed(conn);
                 conn.PlayerLife = Math.Min(conn.PlayerLife, conn.PlayerMaxLife);
                 conn.PlayerMana = Math.Min(conn.PlayerMana, (uint)UnreservedMana(conn));
             }
@@ -1243,6 +1262,7 @@ partial class Program
                 await Send(remote, stream, ciphers, InstanceEntities.Gold(gold), $"0x02a9 gold: {gold} (respec, {cost} paid)");
             }
             await SendCharacterStats(remote, stream, ciphers, conn, "passives");
+            await Send(remote, stream, ciphers, [], "0x01c1/0x01c2 passive buffs (passives)", atGate: () => PassiveBuffAuras.Presentation(conn));
             // A refund can lower the maximum life: the current life needs its own 0x1b1 (0x1b3 only carries the maximum).
             await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(PlayerId, conn.PlayerLife),
                 $"0x01b1 player life {conn.PlayerLife} (passives)");

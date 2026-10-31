@@ -50,6 +50,7 @@ partial class Program
                 var shot = new ProjectileOffense(captured.Hit, false, captured.Accuracy, captured.CriticalChance,
                     captured.CriticalMultiplier, wand ? "ordinary wand" : "ordinary bow")
                 { SkillStats = SkillsFor(conn).EffectStats(effect, 1).ToDictionary(s => s.Item1, s => s.Item2),
+                    VsBlindedCriticalChance = AttackCriticalChanceVsBlinded(conn, character, release: true),
                     Penetration = captured.Penetration, ResistanceMods = captured.ResistanceMods, ImpaleChance = captured.ImpaleChance,
                     ImpaleSettings = captured.ImpaleSettings, AccuracyProfile = captured.AccuracyProfile,
                     Ignite = MonsterIgnites.Settings.From(AilmentPanelStats.Compute(new("main_hand", Spell: false, Projectile: true),

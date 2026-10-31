@@ -66,6 +66,10 @@ partial class Program
     // The item in the main hand (row 2, the active set) and its base type, unless its requirements are not met.
     static (Item Item, ItemCatalog.BaseType? Type)? ActiveMainHand(ClientState conn) => ActiveHand(conn, PlayerInventories.Weapon1);
 
+    // "While holding a Fishing Rod" (PoB Condition UsingFishing from weaponData1): the active set's main hand only, and
+    // not a rod whose requirements are unmet. The client's calculators test main_hand_weapon_type 15 the same way.
+    static bool HoldingFishingRod(ClientState conn) => ActiveMainHand(conn)?.Type?.Class == "FishingRod";
+
     // The item in the off hand (row 3, the active set). The weapon swap trades the hands' items with rows 14/15
     // (SwapWeaponSets), so Offhand2 always holds the inactive set's off hand, which is never swung.
     static (Item Item, ItemCatalog.BaseType? Type)? ActiveOffHand(ClientState conn) => ActiveHand(conn, PlayerInventories.Offhand1);

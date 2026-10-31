@@ -47,7 +47,7 @@ review other bow snapshots and special repeats. Complete remaining conditions, c
 publish all matching chance/always-hit rows. Ordinary/selected main-hand
 average/DPS now includes normal-reference landing and critical-confirmation probabilities; dual-hand/multi-hit,
 integer-roll expectation and other sources remain open. Validate these paths natively when shared resources are free.
-See [damage §2g](../docs/protocol/20-damage.md#2g-ordinary-attack-evasion-and-critical-confirmation).
+See [damage §2h](../docs/protocol/20-damage.md#2h-ordinary-attack-evasion-and-critical-confirmation).
 
 Impale now has a shared actual-contact implementation for ordinary and supported hits, scoped chance/effect
 inputs, captured duration/hit counts and separately mitigated reflection. The three selected chance aliases
@@ -97,6 +97,9 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
 - **Warcry restriction (#297):** shared actor admission has regression and seven real-client controls in Status.
   Blocked input, source clearing, paid retries and an accepted cry's release are verified.
   See [11](../docs/protocol/11-skills.md) section 10b; broader warcry engines and Phrecia enablement remain separate.
+  Warcry speed, one-use warcry cooldowns and the shared release effects (section 10i) run for Enduring Cry; the other
+  warcries need executors, and explosions need their global added damage, flat crit chance, on-hit effects, the
+  native explosion art (a generic gore burst stands in) and the wave delay.
 - **Character panel (#75):** the Energy Shield regeneration row now shares the implemented recovery calculation,
   with native checks for modifiers, clearing and separation from recharge.
   Ordinary Life/Mana regeneration now includes separate regeneration/recovery increases and matching prohibitions.
@@ -277,6 +280,8 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Native grey-icon prediction and persistent restricting equipment remain separate verification.
   Duplicate-instance support context and queued ordinary acknowledgements have separate regression controls.
   Complete Lone Messenger, party auras and unsupported curse/enemy/banner/Vaal executors remain separate.
+  Passive enemy auras send and apply only hit conversions so far ([11](../docs/protocol/11-skills.md) section 10e);
+  the others (Overwhelm, the Occultist's) need consumers for their stats first.
 - **Start:** the auras' 3D effects (BuffVisuals EPKs of the `IsSkillBuff` rows do not render, unlike Righteous
   Fire's); the combat auras (Anger, Hatred, Wrath, Zealotry, Pride), Heralds, banners, curse auras and
   their unsupported conditional effects.
@@ -350,7 +355,13 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Critical elemental ignore and non-critical penetration now compose with it on the same rolled packet.
   Rerun critical ignore against a rebuilt final DLL: the previous combined run used the preceding #225 artifact.
   Recheck the resolved bow-contact and target-modifier composition natively before claiming new combined proof.
-  Special ES mechanics, conditional penetration, exposure, ailments and further added-damage/support effects remain open.
+  Special ES mechanics, conditional penetration, exposure, damaging and alternative ailments on monsters (beyond the
+  player's ignites) and further added-damage/support effects remain open.
+  The player's ignites on monsters exist (`MonsterIgnites`), but only Abberath's Fury's footstep hits call them: the
+  default attack, gems, projectiles and bows need their flat (pre-increase) fire packet passed to `IgniteFromHit` next
+  ([20](../docs/protocol/20-damage.md) §3).
+  An attack's packet goes through `MaximumAttackDamage.Apply` after conversion first (Devout of Ryslatha's more maximum
+  damage scales attack ailments too), with a regression test.
   Ordinary Frostblink's bounded ground-instant acceptance passed actual Q, retry and invalid-request checks.
   Its hovered stationary-monster 0x191 path now uses the native size-aware object aim and object-bound confirmation.
   Automated acceptance/queued rejection checks and manual native endpoint experiments pass.
@@ -403,8 +414,16 @@ remaining native checks are recorded in [the port record](../docs/dev/issue75-po
   Do not inherit an owner's spell-damage restriction onto independent minions or daemons without a skill rule.
 - **Done when:** damage numbers match the character panel and the monsters' levels.
 
-### Incoming elemental ailment extensions
+### Elemental ailment extensions
 
+- The player's chill, freeze and shock on monsters are implemented with Gateway coverage.
+  Check the chilled/frozen/shocked buffs, the sent `virtual_action_speed_+%` and the frozen pose with the real client,
+  and find what 0x1c1's +0x82 u16 does.
+  The shatter visual (the server ends a shattered monster's ailments and spreads nothing from it; the packet that
+  removes the corpse is not known), unique/boss
+  thresholds and the monster variety's own immunities remain open, as do chill, freeze and ignite proliferation and a
+  native check of the shock proliferation radius's area scaling.
+  See [20](../docs/protocol/20-damage.md#outgoing-chill-freeze-and-shock-on-monsters).
 - Ordinary supported monster basic contacts now exercise ignite/chill/freeze/shock and final avoidance.
   Finish dedicated native buff icons and source/threshold/conditional-immunity parity before claiming a general ailment engine.
   Hostile spell adapters and alternative-ailment sources remain separate work; monster mortar shots already run the

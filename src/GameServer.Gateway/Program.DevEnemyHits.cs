@@ -19,6 +19,7 @@ partial class Program
             using var defenceTime = FortificationOf(conn).Capture(now);
             // Refresh lazy aura/Fortification pools before reading ANY final defence at the accepted contact.
             var stats = CharacterPlayerStats(conn);
+            GainLifeBeforeEnemyHitLocked(conn, stats);
             int resistance = Resistance(conn, type), maximum = MaxResistance(conn, type);
             int blockChance = spell ? conn.Pools.SpellBlockChance : conn.Pools.BlockChance;
             bool luckyBlock = spell ? conn.Pools.SpellBlockLucky : conn.Pools.AttackBlockLucky;
@@ -28,7 +29,7 @@ partial class Program
                 resistance = maximum = 90;
             bool immune = PlayerImmunities(conn).Contains(type);
             bool armourRelevant = type == DamageType.Physical ? amount > 0
-                : type == DamageType.Chaos && conn.Pools.ArmourAppliesToChaosDamage
+                : PlayerHitMitigation.ArmourPercent(conn.Pools, type, name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0) > 0
                     && DamageModel.Mitigate(amount, resistance, maximum) > 0;
             var armour = IncomingArmourLocked(conn, !blocked && !immune && armourRelevant, priorContacts, stats);
             int dealt = blocked || immune ? 0
@@ -48,11 +49,13 @@ partial class Program
                 conn.IncomingHitRandom.Next(100), suppression.Lucky, suppression.Unlucky);
             if (suppressed) dealt = DamageModel.Suppress(dealt, suppression.Effect);
             uint manaBefore = conn.PlayerMana;
-            int gainedLife = blocked ? conn.Pools.LifeGainedOnBlock : 0;
-            int gainedMana = blocked ? conn.Pools.ManaGainedOnBlock : 0;
+            var onBlock = blocked ? BlockRecovery(conn, stats) : default;
+            int gainedLife = blocked ? conn.Pools.LifeGainedOnBlock + onBlock.Life : 0;
+            int gainedMana = blocked ? conn.Pools.ManaGainedOnBlock + onBlock.Mana : 0;
             conn.PlayerLife = (uint)Math.Min(conn.PlayerMaxLife, Math.Max(0, (long)conn.PlayerLife
                 - DamagePlayerHit(conn, type == DamageType.Chaos ? 0 : dealt, type == DamageType.Chaos ? dealt : 0, now, stats) + gainedLife));
             if (block) conn.PlayerMana = (uint)Math.Min((uint)UnreservedMana(conn), (long)conn.PlayerMana + gainedMana);
+            conn.EnergyShield.Recover(onBlock.EnergyShield);
             TrimLeechLocked(conn);
             conn.RecentEnemyHits.Record(now);
             if (block) ChargesWhenHit(conn, blocked, spell);

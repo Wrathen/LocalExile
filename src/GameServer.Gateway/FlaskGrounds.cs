@@ -23,7 +23,8 @@ static class FlaskGrounds
     public static IEnumerable<(Kind Kind, int Radius)> OnUse(IReadOnlyDictionary<string, int> local) =>
         OnUseStats.Where(s => local.GetValueOrDefault(s.Stat) > 0).Select(s => (s.Kind, local[s.Stat]));
 
-    /// <summary>Taunt lasts 3 s (the stat's reminder text: "Taunt lasts for 3 seconds").</summary>
+    /// <summary>Taunt lasts 3 s (the stat's reminder text: "Taunt lasts for 3 seconds"; wiki Taunt), before
+    /// taunt_duration_+% (Program.TauntSeconds).</summary>
     public const double TauntSeconds = 3;
 
     /// <summary>Blind: 20% less accuracy and evasion (Path of Building CalcPerform "Blind"; BuffDefinitions blinded,
@@ -38,6 +39,29 @@ static class FlaskGrounds
     /// (the stat's reminder text and PoB).</summary>
     public static readonly IReadOnlyList<(string Stat, int Value)> ConsecratedStats =
         [("life_regeneration_rate_per_minute_%", 300), ("curse_effect_on_self_+%", -50)];
+
+    /// <summary>Consecrated ground's stats raised by consecrated_ground_effect_+% (Anointed Champion's 50%: 450 and -75).
+    /// Every ground the engine makes is the player's own, so "Consecrated Ground you create" is all of them (PoB CalcPerform
+    /// multiplies the 5% regeneration and the -50% curse effect by 1 + the increase).</summary>
+    public static IReadOnlyList<(string Stat, int Value)> Consecrated(int effectPct) => effectPct == 0 ? ConsecratedStats
+        : [.. ConsecratedStats.Select(s => (s.Stat, (int)((long)s.Value * (100 + effectPct) / 100)))];
+
+    /// <summary>The radius of the consecrated ground around a stationary player, as the client derives
+    /// virtual_consecrated_ground_while_stationary_radius (0x1428d43a0): the plain stat, the Strength variant while Strength
+    /// is the highest attribute (ties count), the Crusader variant with 2 or more Crusader items; the largest wins.</summary>
+    public static int StationaryRadius(Func<string, int> get)
+    {
+        int strength = get("strength");
+        int radius = get("consecrated_ground_while_stationary_radius");
+        if (strength >= get("dexterity") && strength >= get("intelligence"))
+            radius = Math.Max(radius, get("consecrated_ground_while_stationary_radius_if_highest_attribute_is_strength"));
+        if (get("number_of_equipped_crusader_items") > 1)
+            radius = Math.Max(radius, get("consecrated_ground_while_stationary_radius_if_2_crusader_items"));
+        return radius;
+    }
+
+    /// <summary>How long the effects of the player's consecrated ground stay after he stops being covered by any.</summary>
+    public const string LingerStat = "your_consecrated_ground_effect_lingers_for_ms_after_leaving_the_area";
 
     /// <summary>BuffDefinitions rows: blinded (on monsters in smoke), ground_consecration (on the player on it), taunted.</summary>
     public const ushort BlindedBuffRow = 179, ConsecratedBuffRow = 208, TauntedBuffRow = 408;
@@ -64,16 +88,15 @@ static class FlaskGrounds
         return art;
     }
 
-    /// <summary>One thing a flask made: where, how far it reaches, when it ends (connection clock seconds), its effect
-    /// object (the art), and for a taunt the monsters it taunted with their buff ids.</summary>
+    /// <summary>One ground a flask made: where, how far it reaches, when it ends (connection clock seconds) and its effect
+    /// object (the art). A taunt makes none: it is the monsters' (Program.TauntLocked).</summary>
     public sealed record Ground(Kind Kind, int X, int Y, int Radius, double Ends, uint? Object = null)
     {
         public bool Covers((int X, int Y) at) => (at.X - X) * (at.X - X) + (at.Y - Y) * (at.Y - Y) <= Radius * Radius;
-        public Dictionary<uint, ushort> Taunted { get; } = [];
     }
 
-    /// <summary>One connection's flask grounds, the monsters blinded by smoke (with their buff ids), and whether the player
-    /// stands on consecrated ground (its buff id).</summary>
+    /// <summary>One connection's flask grounds, the monsters blinded by smoke (with their buff ids), whether the player
+    /// stands on consecrated ground (its buff id), and the consecrated ground around him while stationary.</summary>
     public sealed class State
     {
         readonly List<Ground> _grounds = [];
@@ -81,10 +104,69 @@ static class FlaskGrounds
         readonly Lock _lock = new();
         ushort? _consecrated;
         bool _ticking;
+        int _stationaryRadius;
+        double _lingerSeconds, _lastCovered = double.NegativeInfinity;
+        Ground? _stationary;
 
         public bool Any
         {
-            get { lock (_lock) return _grounds.Count > 0 || _blinded.Count > 0 || _consecrated is not null; }
+            get { lock (_lock) return !Idle; }
+        }
+
+        bool Idle => _grounds.Count == 0 && _blinded.Count == 0 && _consecrated is null && _stationaryRadius == 0 && _stationary is null;
+
+        /// <summary>The stationary radius and the linger, from the stats last sent to the client (Program.PlayerStatsWithCleared).</summary>
+        public void Configure(int stationaryRadius, int lingerMs)
+        {
+            lock (_lock) (_stationaryRadius, _lingerSeconds) = (Math.Max(0, stationaryRadius), Math.Max(0, lingerMs) / 1000.0);
+        }
+
+        /// <summary>True once when a stationary radius needs the ticker and none runs (Program.RunPlayerTick starts it).</summary>
+        public bool StartTickerIfConfigured()
+        {
+            lock (_lock)
+            {
+                if (_ticking || _stationaryRadius == 0) return false;
+                return _ticking = true;
+            }
+        }
+
+        /// <summary>The ground around the player while he is <paramref name="still"/>: the old one to take away (he moved,
+        /// died, or the radius changed) and the radius of one to make where he stands (0: none).</summary>
+        public (Ground? Gone, int Make) Stationary(bool still, (int X, int Y) at)
+        {
+            lock (_lock)
+            {
+                if (still && _stationaryRadius > 0 && _stationary is { } kept && (kept.X, kept.Y) == at && kept.Radius == _stationaryRadius)
+                    return (null, 0);
+                var gone = _stationary;
+                _stationary = null;
+                return (gone, still ? _stationaryRadius : 0);
+            }
+        }
+
+        /// <summary>The stationary ground made after <see cref="Stationary"/> asked for one.</summary>
+        public void PlaceStationary(Ground ground)
+        {
+            lock (_lock) _stationary = ground;
+        }
+
+        /// <summary>Whether the player counts as on consecrated ground: covered by one of his grounds now, or within the
+        /// linger after the last moment one covered him (the wiki: the effects linger after they would normally be removed,
+        /// by leaving or by the ground ending). A death ends the linger.</summary>
+        public bool OnConsecrated(bool alive, (int X, int Y) at, double now)
+        {
+            lock (_lock)
+            {
+                if (!alive)
+                {
+                    _lastCovered = double.NegativeInfinity;
+                    return false;
+                }
+                bool covered = _grounds.Append(_stationary).Any(g => g?.Kind == Kind.ConsecratedGround && g.Covers(at));
+                if (covered) _lastCovered = now;
+                return covered || now < _lastCovered + _lingerSeconds;
+            }
         }
 
         /// <summary>Adds a ground: true when no ticker runs, so one has to start now (Program.RunFlaskGrounds).</summary>
@@ -104,7 +186,7 @@ static class FlaskGrounds
         {
             lock (_lock)
             {
-                if (_grounds.Count > 0 || _blinded.Count > 0 || _consecrated is not null) return false;
+                if (!Idle) return false;
                 _ticking = false;
                 return true;
             }
@@ -130,12 +212,12 @@ static class FlaskGrounds
         /// <summary>Whether a ground of this kind covers the cell.</summary>
         public bool Covers(Kind kind, (int X, int Y) at)
         {
-            lock (_lock) return _grounds.Any(g => g.Kind == kind && g.Covers(at));
+            lock (_lock) return _grounds.Append(_stationary).Any(g => g?.Kind == kind && g.Covers(at));
         }
 
         /// <summary>Marks a monster blinded (with the buff id that shows it) or not: the buff id to add (newly blinded),
         /// or to remove (no longer), or null when nothing changes. <paramref name="nextBuff"/> runs outside this lock (it
-        /// takes the connection's Monsters lock, under which <see cref="Accuracy"/> is read).</summary>
+        /// takes the connection's Monsters lock, under which <see cref="Blinded(uint)"/> is read).</summary>
         public (ushort Buff, bool Added)? SetBlinded(uint monster, bool blinded, Func<ushort> nextBuff)
         {
             lock (_lock)
@@ -157,14 +239,11 @@ static class FlaskGrounds
             lock (_lock) return [.. _blinded.Keys];
         }
 
-        /// <summary>A monster's accuracy (its hits on the player) or evasion (against the player's attacks), Blind applied
-        /// while it stands in smoke.</summary>
-        public int Accuracy(uint monster, int accuracy)
+        /// <summary>Whether the monster stands blinded in smoke (Program.Blinded: one source of the player's Blind).</summary>
+        public bool Blinded(uint monster)
         {
-            lock (_lock) return _blinded.ContainsKey(monster) ? Blinded(accuracy) : accuracy;
+            lock (_lock) return _blinded.ContainsKey(monster);
         }
-
-        public int Evasion(uint monster, int evasion) => Accuracy(monster, evasion);
 
         /// <summary>Marks the player on consecrated ground or not: the buff id to add or to remove, or null.</summary>
         public (ushort Buff, bool Added)? SetConsecrated(bool on, Func<ushort> nextBuff)
@@ -188,10 +267,11 @@ static class FlaskGrounds
             }
         }
 
-        /// <summary>What the grounds give the player now (consecrated ground's stats while on it).</summary>
-        public IReadOnlyList<(string Stat, int Value)> PlayerStats()
+        /// <summary>What the grounds give the player now: consecrated ground's stats while on it, raised by the player's
+        /// consecrated_ground_effect_+%.</summary>
+        public IReadOnlyList<(string Stat, int Value)> PlayerStats(int effectPct = 0)
         {
-            lock (_lock) return _consecrated is null ? [] : ConsecratedStats;
+            lock (_lock) return _consecrated is null ? [] : Consecrated(effectPct);
         }
     }
 }

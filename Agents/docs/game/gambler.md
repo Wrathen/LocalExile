@@ -58,11 +58,20 @@ Chill caps at 30% and shock at 50%, with two-second base durations and supported
 Freeze lasts six seconds times the cold damage / threshold ratio, capped at three seconds before self-duration;
 durations below 0.3 seconds do not apply.
 Chill scales supported attack/cast timing and movement; freeze interrupts movement/channeling and gates actions.
+`chill_effect_is_reversed` (Surfcaster's Changing Seasons) makes a chill increased action speed by its effect instead
+(PoB `CalcPerform`); a freeze still stops the player, and `not_affected_by_action_speed_modifiers` cancels the
+speed-up as it cancels the slow.
+`all_damage_taken_can_chill` lets a hit of any type chill, by the hit's total damage taken; freeze and shock keep their
+own element ([Surfcaster](surfcaster.md)).
 An interrupted projectile windup stays cancelled after freeze expires; an already released flight remains independent.
 Shock increases subsequent incoming hit damage, ignite ticks and RF self-burn.
 All timers use the pauseable connection clock.
 Immunity flasks remove their ordinary ailment during recomputation, and death/connection teardown clears all effects.
 Native status stats are projected; dedicated ailment buff icons and their art are not implemented by this path.
+The projection includes the final `virtual_action_speed_+%` (key 0xce6), which the native walk (`0x141e7c0b0`),
+action clip (`0x1419fad20`) and animation rate (`0x141e9deb0`) read; network stats do not derive it from the
+intermediary (calculator `0x14281c2d0`). It is not sent while frozen, where −100 would divide the native clip by zero.
+Whether the native walk and clips now follow a chill is not checked live.
 
 This scope does not add hostile projectile/spell adapters, enemy chance-to-ailment mods, special ailment thresholds,
 conditional ailment immunities or alternative-ailment sources (Scorch, Brittle, Sap).

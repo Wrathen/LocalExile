@@ -12,6 +12,8 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
   melee attacks all work ([10](../docs/protocol/10-chat-and-commands.md) §5, [11](../docs/protocol/11-skills.md) §6);
   areas are populated with their MonsterPacks and unique boss ([14](../docs/protocol/14-monster-packs.md));
   emerge monsters rise near the player ([10](../docs/protocol/10-chat-and-commands.md) §5).
+  Hits can make monsters flee ([11](../docs/protocol/11-skills.md) §6); a live check should settle the flee distance
+  and whether the real server walks a fleeing monster with Monster.ot's `Flee` action instead of Move.
   Inherited Life corpse/sinking flags and the source eligibility predicate are implemented for ordinary creation
   ([status](../status/monsters.md#partly-working)); integrated native evidence is scoped in
   [04](../docs/protocol/04-player-entity.md#44-life-0x141e6c2f0-55-bytes).
@@ -24,7 +26,8 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
   `Grounds`, the 346 varieties with NPC / ControlZone / BlightTower … components (each needs its deserializer, schema.md).
   Emerge monsters: the official emerge distance and whether a pack rises together are unknown (the server's `.ais`
   files); types whose Transitionable lists more states (SpiderBoss: 3) are still created risen.
-  Corpse consumers still need authoritative final-death registration, identity and one-use reservation/consumption.
+  Corpse consumers still need authoritative final-death registration and identity; one-use consumption exists only as
+  Deathrattle's `SpawnedMonster.CorpseConsumed` flag, with no reservation shared between consumers.
   Preserve zero-Life, type, spectre and owned restrictions; dead snapshots also need Actor's conditional death bytes.
   Check every new component with `scripts/re/frida/check-components.js`.
 - **Done when:** monsters in areas match the official game's (mods, rarity bonuses, emerge, boss bar).

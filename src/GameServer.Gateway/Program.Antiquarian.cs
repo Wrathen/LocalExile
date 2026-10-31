@@ -43,6 +43,7 @@ partial class Program
         IReadOnlyDictionary<uint, int> stats)
     {
         int Get(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
+        (nonChaos, chaos) = TotemsTakeHitLocked(conn, nonChaos, chaos, now, stats);
         int total = (int)Math.Min(int.MaxValue, (long)nonChaos + chaos);
         conn.Ward.Advance(now);
         bool wasBroken = conn.Ward.Broken;

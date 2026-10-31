@@ -80,15 +80,18 @@ public static class InstanceEntities
     /// u8 u16, bit1 +0x68: an f32 duration in seconds, default +infinity, so <paramref name="u68"/> takes its bits, bit2
     /// u16 stacks +0x70 (default 1), bit3 u16 ActionTypes HASH16 +0x74 then u16 skill id +0x72 (the active icon),
     /// bit4 u16 BuffVisuals override (default the row's), bit5 u8 +0x80
-    /// (default 2), bit6 → +0x81, bit7 f32 +0x6c (default 1.0)), then a u16 when the row's bool at +0xff is set, one u32
+    /// (default 2), bit6 → +0x81, bit7 f32 +0x6c (default 1.0)), then a u16 +0x82 when the row's bool at +0xff
+    /// (<c>__col44</c>) is set (<paramref name="u82"/>: the caller must give it exactly for those rows), one u32
     /// per GrantedStats value when its IsRecovery (+0x7c) is set (<paramref name="values"/>: the caller must give exactly
-    /// that many, or the client misreads the message), and a u32-counted list of u32. The buff's visual (BuffVisuals)
+    /// that many, or the client misreads the message), and a u32-counted list of u32 (<paramref name="list"/>, buff +0x80: a
+    /// RecordSkillUseLocations buff's first entry, which its behaviour reads unchecked). The buff's visual (BuffVisuals)
     /// plays while it lasts. u68 is the raw IEEE-754 f32 duration in seconds (not integer milliseconds);
     /// f6c is the countdown rate (default 1.0).
     /// </summary>
     public static byte[] AddBuff(uint objectId, ushort buffInstance, ushort buffRow, uint sourceId = 0, ushort sourceSkill = 0,
         IReadOnlyList<uint>? values = null, uint? u68 = null, float? f6c = null, ushort? visual = null,
-        (ushort Id, ushort Action)? activeSkill = null, bool auraSource = false, byte? displayState = null, ushort? stacks = null)
+        (ushort Id, ushort Action)? activeSkill = null, bool auraSource = false, byte? displayState = null, ushort? stacks = null,
+        ushort? u82 = null, IReadOnlyList<uint>? list = null)
     {
         // flags bit1: u32 +0x68; bit7: f32 +0x6c (read right after bit1's field); bit4: u16 BE a BuffVisuals row in place
         // of the BuffDefinitions row's (+0x38; read after bits 2 and 3, a row past the table keeps none): a skill
@@ -108,7 +111,9 @@ public static class InstanceEntities
         if (activeSkill is { } skill) w.U16(skill.Action).U16(skill.Id);
         if (visual is { } v) w.U16(v);
         if (displayState is { } state) w.U8(state);
-        return w.Bytes([.. (values ?? []).SelectMany(v => new[] { (byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v })]).U32(0).ToArray();
+        if (u82 is { } row) w.U16(row);
+        static byte[] Be(IReadOnlyList<uint>? u) => [.. (u ?? []).SelectMany(v => new[] { (byte)(v >> 24), (byte)(v >> 16), (byte)(v >> 8), (byte)v })];
+        return w.Bytes(Be(values)).U32((uint)(list?.Count ?? 0)).Bytes(Be(list)).ToArray();
     }
 
     /// <summary>S→C 0x1c2 (class 0x1435dd918, read 0x141fdfdd0): object header, u16 buff instance: the buff ends.</summary>

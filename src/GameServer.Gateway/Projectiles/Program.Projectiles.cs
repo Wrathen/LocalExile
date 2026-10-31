@@ -235,23 +235,29 @@ partial class Program
             double more = contact.Multiplier * (contact.Phase > 0 ? shot.ReturnMultiplier : 1);
             if (!shot.Spell && shot.FarShot) more *= AntiquarianEffects.FarShot(contact.Projectile.Distance);
             var baseHit = contact.IsArea ? shot.AreaHit ?? shot.Hit : shot.Hit;
-            var packet = new SkillDamageContext(shot.Spell ? SkillHitKind.Spell : SkillHitKind.Attack,
-                CharacterPlayerStats(Conn)).Hit(baseHit).Scale(more);
-            var gambler = GamblerFor(CharacterPlayerStats(Conn));
-            var rolled = WithDamageVsRarity(CharacterPlayerStats(Conn), target, (gambler with { DamageMorePct = 0 }).RollOutgoingHit(packet, random));
-            int chance = contact.Projectile.Form > 0 ? shot.SecondFormCriticalChance ?? shot.CriticalChance : shot.CriticalChance;
+            var player = CharacterPlayerStats(Conn);
+            var packet = new SkillDamageContext(shot.Spell ? SkillHitKind.Spell : SkillHitKind.Attack, player)
+                .Hit(baseHit).Scale(more);
+            var gambler = GamblerFor(player);
+            var rolled = WithDamageVsRarity(player, target, (gambler with { DamageMorePct = 0 }).RollOutgoingHit(packet, random));
+            int chance = contact.Projectile.Form > 0 && shot.SecondFormCriticalChance is int second ? second
+                : CriticalChanceOn(Conn, contact.Target.Id, shot.CriticalChance, shot.VsBlindedCriticalChance);
             // Base chance/multiplier belong to release; conditional owner state is read at this contact.
             bool critical = RollCriticalStrike(Conn, chance, shot.SkillStats, attack: !shot.Spell, skillRoll: shot.CriticalRoll)
                 && (shot.Spell || EvasionEntropy.ConfirmsCritical(hitChance, Conn.AttackAccuracyRandom));
-            var (damage, _) = MonsterDamage(target, rolled, critical, !shot.Spell, shot.ResistanceMods, shot.Penetration, out var taken, gambler.InvertsResistance(random));
-            if (critical) damage = DamageModel.CriticalDamage(damage, CriticalMultiplierOn(target, shot.CriticalMultiplier));
-            LeechOnHitLocked(Conn, target, taken, damage, shot.Leech);
+            int multiplier = CriticalMultiplierOn(target, shot.CriticalMultiplier);
+            var (damage, _, mitigated) = MonsterHitDamage(target, rolled, critical, !shot.Spell, at, shot.ResistanceMods,
+                shot.Penetration, gambler.InvertsResistance(random));
+            if (critical) damage = DamageModel.CriticalDamage(damage, multiplier);
+            LeechOnHitLocked(Conn, target, MonsterTakenComponents(target, mitigated, shot.Spell), damage, shot.Leech);
             var settings = (critical ? shot.CriticalImpaleSettings : null) ?? shot.ImpaleSettings ?? new(shot.ImpaleChance);
             double physical = rolled[DamageType.Physical].Min * (critical ? Math.Max(0, shot.CriticalMultiplier) / 100d : 1);
             var (stored, _) = target.Impale.OnHit(physical, at, settings, random, target.Mods.Effects["avoid_impale_%"]);
             damage = ImpaleStats.AddReflected(damage, MonsterImpaleDamage(target, stored));
             var hit = ApplyMonsterHitLocked(Conn, target, damage);
             if (hit is null) return ProjectileHitResult.Miss;
+            AilmentsOnHitLocked(Conn, target, mitigated, shot.Spell, critical, multiplier, player, shot.SkillStats,
+                at, contact.Projectile.ReactionRandomSource);
             if (hit.Value.Life > 0 && rolled[DamageType.Fire].Max > 0) IgniteOnHitLocked(this, contact.Target.Id, target, shot.Ignite, critical, at);
             RageOnHitLocked(Conn, attack: !shot.Spell, melee: false, critical, shot.SkillStats,
                 contact.Projectile.ReactionRandomSource);

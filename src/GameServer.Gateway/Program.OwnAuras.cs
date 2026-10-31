@@ -24,13 +24,31 @@ partial class Program
         }
     }
 
+    // your_spells_are_disabled (Devout of Gruthkul) from the same raw caster sources; a developer value replaces them.
+    // The client greys such a skill itself: skill_disabled_by_stat is 0x1520 AND casting_spell (FUN_1428cf770).
+    static bool SpellsDisabled(ClientState conn, Dictionary<uint, int>? sources = null)
+    {
+        if (Stats.Key("your_spells_are_disabled") is not uint key) return false;
+        lock (conn.Monsters)
+            return (conn.PlayerStats.TryGetValue(key, out int set) ? set
+                : (sources ?? CharacterStatSources(conn).Stats).GetValueOrDefault(key)) != 0;
+    }
+
+    // What the client counts as a spell for that restriction: the casting_spell flag SkillCatalog publishes.
+    static bool CastingSpell(ClientState conn, int effect) => SkillsFor(conn).IsSpell(effect) && !SkillsFor(conn).IsAttack(effect);
+
     // Auras contains only the current ordinary self-aura executor's source/recipient pairs.
     // Received buffs, RF, flasks and other temporary effects have separate ownership and are untouched.
     // Local policy: suspend runtime effects, retaining ActiveAuras intent; this is not a proven GGG lifecycle.
+    // Disabled spells suspend the auras that are spells (every supported one) the same way.
     static bool SuspendRestrictedOwnAuras(ClientState conn, Dictionary<uint, int>? sources = null)
     {
-        if (conn.Auras.Count == 0 || OwnAuraRestrictionValue(conn, sources) == 0) return false;
-        conn.Auras.Clear();
+        if (conn.Auras.Count == 0) return false;
+        lock (conn.Monsters) sources ??= CharacterStatSources(conn).Stats;
+        bool all = OwnAuraRestrictionValue(conn, sources) != 0, spells = !all && SpellsDisabled(conn, sources);
+        var gone = conn.Auras.Values.Where(a => all || spells && CastingSpell(conn, a.Effect)).ToArray();
+        if (gone.Length == 0) return false;
+        foreach (var aura in gone) conn.Auras.Remove(aura.SkillId);
         conn.AuraStatsDirty = true;
         return true;
     }

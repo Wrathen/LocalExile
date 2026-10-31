@@ -14,6 +14,10 @@ Only one main ascendancy is selected at a time, and it must belong to the charac
 **Phrecia play is explicitly gated by default.**
 Gambler has an explicit read-only installed-graph opt-in; see [its checklist and scope](gambler.md).
 Aristocrat has the same check behind `Game_VERIFIED_ARISTOCRAT=1`; see [its checklist](aristocrat.md).
+Ancestral Commander has it behind `Game_VERIFIED_ANCESTRAL_COMMANDER=1`; see [its checklist](ancestral-commander.md).
+Paladin has it behind `Game_VERIFIED_PALADIN=1`; [its checklist](paladin.md) lists what the engine does not apply yet.
+Polytheist has it behind `Game_VERIFIED_POLYTHEIST=1`; see [its checklist](polytheist.md).
+Surfcaster has it behind `Game_VERIFIED_SURFCASTER=1`; see [its checklist](surfcaster.md).
 Each opt-in is limited to its identity and the exact pinned graph bytes.
 The shipped alternate graph contains older ordinary-tree topology.
 A separately agreed client-compatible graph is required before Phrecia can be enabled in an actual game connection.

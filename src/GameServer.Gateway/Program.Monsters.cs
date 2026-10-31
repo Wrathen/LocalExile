@@ -53,12 +53,16 @@ partial class Program
     }
 
     // Creates one monster: registers its type at this level (0x20, once per connection), creates it (0x2b9) and puts it in
-    // the wake zone (0x1a9), and keeps it for the AI. /spawn_mob and the area's packs (PopulateArea) use it.
-    internal static async Task SpawnMonster(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, MonsterCatalog.Variety variety,
+    // the wake zone (0x1a9), and keeps it for the AI. /spawn_mob, the area's packs (PopulateArea) and the player's minions
+    // (extra stats on its Stats component; owned runs under the lock that adds it) use it. Its object id.
+    internal static async Task<uint> SpawnMonster(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, MonsterCatalog.Variety variety,
         byte level, MonsterRarity rarity, int x, int y, string? name = null, bool friendly = false, bool log = true, uint? damagedLife = null,
-        MonsterModSet? mods = null, bool alone = true, bool? unrisen = null)
+        MonsterModSet? mods = null, bool alone = true, bool? unrisen = null, IReadOnlyList<(uint Key, int Value)>? extraStats = null,
+        Action<uint, SpawnedMonster>? owned = null)
     {
-        uint id = conn.NextObjectId++;
+        uint id;
+        // Under the lock the projectile visuals and ground art take ids under: minions spawn from their own loop.
+        lock (conn.Monsters) id = conn.NextObjectId++;
         int bodySize = Math.Clamp(variety.ObjectSize - 1, -1, 127);
         if (bodySize >= 0)
         {
@@ -108,7 +112,7 @@ partial class Program
         List<(uint, int)>? stats = skill is null ? null : [.. attack.Stats()];
         // The final maximum too: the client applies no modifier of its own (as for the player's maximum_life), so without it
         // the life bars kept the base maximum and a unique showed full until its life fell below it (live 2026-10-21).
-        foreach (var stat in MonsterModClientStats(mods.Effects, life, baseLife)) (stats ??= []).Add(stat);
+        foreach (var stat in MonsterModClientStats(mods.Effects, life, baseLife).Concat(extraStats ?? [])) (stats ??= []).Add(stat);
         var monster = new MonsterObject(x, y, life, variety.ComponentsOrBase, ao, rarity, name, variety.StateMachine, MonsterEmerge.CreateState(variety, emerge, waits), team,
             skill is null ? null : stageSkill is null ? [skill] : [skill, stageSkill], stats)
         {
@@ -140,6 +144,7 @@ partial class Program
         if (log && attack.Projectile is { } shot)
             Console.WriteLine($"[gateway] {remote} monster 0x{id:x} ranged attack projectile {shot.Metadata} ({shot.Speed} units/s{(shot.Lobbed ? ", mortar" : "")})");
         using (ProjectileMutation(conn))
+        {
             MonsterEmerge.AddLocked(conn, id, new SpawnedMonster($"{variety.Name}@{level}", conn.NewMonsterWalk(id, x, y, walkSpeed, bodySize, rarity == MonsterRarity.Unique),
                 variety.AggroRange, Math.Max(2, variety.ObjectSize + 1), life)
             {
@@ -147,10 +152,13 @@ partial class Program
                 Life = Math.Min(damagedLife ?? life, life), Stage = stageSkill is null ? null : stage, States = variety.StateMachine,
                 HitAnimations = Monsters.TakeHit(variety.Id), Mods = mods, CollisionPosition = (x, y), SpeedRoll = speedRoll,
             }, emerge, waits);
+            if (owned is not null && conn.Monsters.TryGetValue(id, out var added)) owned(id, added);
+        }
         if (waits) WatchBuried(remote, stream, ciphers, conn);
         // A kept monster that was hit: its life as a hit sets it (0x1b1).
         if (damagedLife < life)
             await Send(remote, stream, ciphers, InstanceProtocol.LifeUpdate(id, damagedLife.Value), !log ? null : $"0x01b1 monster 0x{id:x} life {damagedLife}/{life}");
+        return id;
     }
 
     // The area's monsters, once the player is in (Agents/docs/protocol/14-monster-packs.md): MonsterPacks scattered over the
@@ -204,6 +212,9 @@ partial class Program
         public readonly List<(uint Id, SpawnedMonster Monster, int Action, (int X, int Y) From, (int X, int Y) To, string Why)> Moves = [];
         public readonly List<(uint Id, SpawnedMonster Monster, int Action)> Swings = [];
         public readonly List<(uint Id, SpawnedMonster Monster)> BossBars = [];
+        public readonly List<(uint Id, SpawnedMonster Monster, (int X, int Y) From, MinionTarget Target)> MinionSwings = [];
+        // What changed on the monsters' chill, freeze and shock (MonsterAilmentChangesLocked), sent before the orders.
+        public readonly List<(byte[] Packet, string Log)> Ailments = [];
     }
 
     internal static async Task RunMonsterAi(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
@@ -232,8 +243,9 @@ partial class Program
         var plan = new MonsterAiPlan();
         lock (conn.Monsters)
         {
-            if (conn.Closed || conn.LeavingArea || conn.PendingTransfer is not null
-                || !cadence.TryBeginStep(now, conn.AiEnabled && !conn.Paused && conn.PlayerLife > 0)) return plan;
+            if (conn.Closed || conn.LeavingArea || conn.PendingTransfer is not null) return plan;
+            if (!conn.Paused) plan.Ailments.AddRange(MonsterAilmentChangesLocked(conn, now));
+            if (!cadence.TryBeginStep(now, conn.AiEnabled && !conn.Paused && conn.PlayerLife > 0)) return plan;
             using var blockers = conn.BeginMonsterBlockerFrame(now);
             var (px, py) = conn.Walk.Position(now);
             // Entry protection: hostile monsters neither chase nor swing while the player stands protected on the arrival cell.
@@ -251,19 +263,65 @@ partial class Program
                     m.BossBarShown = true;
                     plan.BossBars.Add((id, m));
                 }
-                else if (m.Aggro && d > 2 * m.AggroRange)
+                else if (m.Aggro && !m.Fleeing && d > 2 * m.AggroRange && !conn.Minions.Owns(id))   // a flee walk is not cut short; a minion keeps following
                 {
                     m.Aggro = false;
                     m.SwingGeneration = null;
                     plan.Moves.Add((id, m, ++m.ActionGeneration, m.Walk.Order(mx, my, now), (mx, my), "gives up"));
                     continue;
                 }
+                // Frozen: it stands where it is and does nothing until the freeze ends.
+                double action = MonsterActionFactor(m, now);
+                if (action == 0)
+                {
+                    if (now < m.Walk.ArrivesAt) plan.Moves.Add((id, m, ++m.ActionGeneration, m.Walk.Order(mx, my, now), (mx, my), "is frozen"));
+                    m.LastTarget = null;
+                    continue;
+                }
+                // Fleeing (MonsterFlee): once a started swing ends, it walks to its flee point and does nothing
+                // else until that walk ends, there or short of it; then it chases again.
+                if (m.Fleeing)
+                {
+                    if (now < m.BusyUntil || cadence.SwingPending(m)) continue;
+                    if (m.FleeTo is { } flee)
+                    {
+                        m.FleeTo = m.LastTarget = null;
+                        m.SwingGeneration = null;
+                        plan.Moves.Add((id, m, ++m.ActionGeneration, m.Walk.Order(flee.X, flee.Y, now), flee, "flees"));
+                        continue;
+                    }
+                    if (now < m.Walk.ArrivesAt) continue;
+                    m.Fleeing = false;
+                }
                 if (!m.Aggro || !MonsterAiCadence.Due(now, m.BusyUntil) || cadence.SwingPending(m)) continue;
+                // The player's fighting minions attack his enemies near them; with none they follow him.
+                if (conn.Minions.Fights(id) && m.Attack is { } ma && MinionTargetLocked(conn, id, m, (mx, my), (px, py), now) is { } target)
+                {
+                    if (target.InReach)
+                    {
+                        m.BusyUntil = now + ma.Seconds;
+                        m.LastTarget = null;
+                        m.Walk.Order(mx, my, now);
+                        plan.MinionSwings.Add((id, m, (mx, my), target));
+                    }
+                    // A new path when the target moved, else again after arriving short, at most twice a second.
+                    else if (m.LastTarget is not { } last || Math.Abs(last.X - target.Approach.X) + Math.Abs(last.Y - target.Approach.Y) >= 3
+                        || now >= m.Walk.ArrivesAt && now >= m.NextChaseRetryAt)
+                    {
+                        m.NextChaseRetryAt = now + 0.5;
+                        m.LastTarget = target.Approach;
+                        m.SwingGeneration = null;
+                        plan.Moves.Add((id, m, ++m.ActionGeneration, m.Walk.Order(target.Approach.X, target.Approach.Y, now),
+                            target.Approach, $"minion chases monster 0x{target.Id:x}"));
+                    }
+                    continue;
+                }
                 // Attack cadence remains the attack's own duration; faster AI only reduces the delay after expiry.
                 // A pending echo/contact keeps its original generation instead of reserving repeated swings at the gate.
+                // A chill slows the swing by its action speed, as the native clip does.
                 if (m.Hostile && m.Attack is { } a && d <= a.Range)
                 {
-                    m.BusyUntil = now + a.Seconds;
+                    m.BusyUntil = now + MonsterSwingSeconds(conn, m, now) / action;
                     m.LastTarget = null;
                     m.Walk.Order(mx, my, now);
                     m.SwingGeneration = ++m.ActionGeneration;
@@ -325,6 +383,7 @@ partial class Program
         // Advance the projectile runtime first: decisions and committed projectile contacts share one game time and pose.
         using (ProjectileMutation(conn, phase: "ai")) plan = PlanMonsterAi(conn, cadence, ProjectileWorldTime(conn));
         const ushort Move = 0x2909;
+        foreach (var (packet, log) in plan.Ailments) await Send(remote, stream, ciphers, packet, log);
         // A chase is re-ordered every few ticks: its lines only with Game_TRACE=ai (the packet history keeps them).
         foreach (var (id, m, action, from, to, why) in plan.Moves)
             await SendMonsterAction(remote, stream, ciphers, conn, id, m, action,
@@ -337,6 +396,8 @@ partial class Program
         }
         foreach (var (id, m, action) in plan.Swings)
             _ = RunPlannedMonsterSwing(remote, stream, ciphers, conn, cadence, id, m, action);
+        foreach (var (id, m, from, target) in plan.MinionSwings)
+            _ = MinionSwing(remote, stream, ciphers, conn, id, m, from, target);
         conn.Performance.MaybeLog(remote);
     }
 
@@ -488,25 +549,45 @@ partial class Program
         }
     }
 
+    // "Gain X% of Missing Unreserved Life before being Hit by an Enemy" (PoB CalcDefence: only while alive, capped at the
+    // recoverable Life). Life reservation is not modelled, so unreserved Life is maximum Life. A blocked hit still counts:
+    // blocking does not prevent the defender's when-hit effects (wiki Blocking). Call under the Monsters lock.
+    static void GainLifeBeforeEnemyHitLocked(ClientState conn, IReadOnlyDictionary<uint, int> stats)
+    {
+        if (conn.PlayerLife == 0 || conn.PlayerLife >= conn.PlayerMaxLife
+            || Stats.Key("missing_unreserved_life_%_gained_as_life_before_hit") is not uint key
+            || stats.GetValueOrDefault(key) is not (> 0 and var pct)) return;
+        conn.PlayerLife = (uint)Math.Min(conn.PlayerMaxLife,
+            conn.PlayerLife + (long)(conn.PlayerMaxLife - conn.PlayerLife) * pct / 100);
+    }
+
     internal static async Task MonsterSwing(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn, uint id,
         SpawnedMonster m, int action)
     {
         if (m.Attack is not { } a) return;
         // Entry protection: a protected player is not attacked (the planner also skips hostile monsters meanwhile).
         if (InGracePeriod(conn)) return;
+        // Its attack time now: a chill slows it by its action speed, Devout of Gruthkul by the player's attacker slow.
+        double seconds;
+        lock (conn.Monsters)
+        {
+            double factor = MonsterActionFactor(m, ProjectileWorldTime(conn));
+            if (factor == 0) return;
+            seconds = MonsterSwingSeconds(conn, m, ProjectileWorldTime(conn)) / factor;
+        }
         double startedAt = 0;
         if (!await SendMonsterAction(remote, stream, ciphers, conn, id, m, action, () =>
         {
             startedAt = conn.Clock.Elapsed.TotalSeconds;
             var from = m.Walk.Position(startedAt);
             var player = conn.Walk.Position(startedAt);
-            m.BusyUntil = startedAt + a.Seconds;
+            m.BusyUntil = startedAt + seconds;
             m.SwingGeneration = action;
             return InstanceProtocol.ActionStarted(id, from.X, from.Y, player.X, player.Y, a.SkillId, MonsterActionSequence, 0x0408, targetObjectId: PlayerId);
-        }, $"0x01ab monster 0x{id:x} ({m.Label}) attacks the player, attack time {a.Seconds:0.00} s")) return;
+        }, $"0x01ab monster 0x{id:x} ({m.Label}) attacks the player, attack time {seconds:0.00} s")) return;
         // The contact: the clip's keyframe for a projectile skill (the Spitter's attack1 spits at 37.5 % of the attack),
         // half the attack time for a melee swing (its clips' keyframes are not read yet).
-        if (!await WaitMonsterActionTime(conn, id, m, action, startedAt + a.Seconds * (a.Release?.Fraction ?? 0.5))) return;
+        if (!await WaitMonsterActionTime(conn, id, m, action, startedAt + seconds * (a.Release?.Fraction ?? 0.5))) return;
         if (a.Projectile is { } projectile)
         {
             // The shot leaves at the contact and flies; its hit lands when it reaches the player (Program.ProjectileHostile.cs).
@@ -533,6 +614,12 @@ partial class Program
             // clock read the life tick or a mortar landing already made, and the fortification and recent-hit trackers
             // refuse to go backwards (review 2026-10-30: the refusal faulted the swing's task and the hit was lost).
             double now = Math.Max(ProjectileWorldTime(conn), conn.Clock.Elapsed.TotalSeconds);
+            // A freeze that landed during the swing interrupts it.
+            if (MonsterActionFactor(m, now) == 0)
+            {
+                Console.WriteLine($"[gateway] {remote} monster 0x{id:x} ({m.Label}) frozen: its swing is cancelled");
+                return null;
+            }
             outcome = CommitMonsterHitLocked(remote, conn, id, m, a, now, conn.Walk.Position(now), m.Walk.Position(now), checkRange: true);
             return outcome?.HitPacket;
         }, $"0x01af monster 0x{id:x} hit on the player (kind 3, sequence 0xffff)")) return;
@@ -546,7 +633,7 @@ partial class Program
 
     /// <summary>What a monster's hit on the player did (CommitMonsterHitLocked), for the packets that present it.</summary>
     internal sealed record MonsterHitOutcome(byte[] HitPacket, uint Life, uint Mana, uint ManaBefore, int Damage, int RawDamage,
-        bool Blocked, bool Critical, PlayerRecoveryIntent? Recovery, RecentEnemyHits.Decision Armour);
+        bool Blocked, bool Critical, PlayerRecoveryIntent? Recovery, RecentEnemyHits.Decision Armour, bool Spirit = false);
 
     // The monster's hit on the player, committed under the Monsters lock at the moment it lands: reach (melee only),
     // evasion, the mod-rolled packet, block, armour, resistances, ailments, recovery and death. Null when it misses or is
@@ -558,6 +645,7 @@ partial class Program
         using var defenceTime = FortificationOf(conn).Capture(now);
         // Resolve lazy final defences here, never at AI collection or before a queued echo/pause wait.
         var stats = CharacterPlayerStats(conn);
+        int StatOf(string name) => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0;
         var reduction = PlayerDamageReduction(conn, stats);
         if (checkRange && Dist(here, from) > a.Range + 2)
         {
@@ -567,20 +655,30 @@ partial class Program
         // The monster's accuracy comes from DefaultMonsterStats at its level. Evasion uses PoE's shared entropy
         // counter: every attack adds its hit chance, and reaching 100 consumes 100 and hits (evasion cannot streak
         // indefinitely). A new counter starts after 3.33 s without an attack.
-        int monsterAccuracy = conn.FlaskGrounds.Accuracy(id, m.Mods.Effects.Accuracy(Monsters.BaseAccuracy(m.Level) ?? 0));   // blinded in smoke
-        int hitChance = DamageModel.AccuracyHitChance(conn.Pools.Evasion, monsterAccuracy);
+        int monsterAccuracy = UnderBlind(conn, id, m.Mods.Effects.Accuracy(Monsters.BaseAccuracy(m.Level) ?? 0));
+        int evasion = PlayerEvasion(conn, now);
+        int hitChance = DamageModel.AccuracyHitChance(evasion, monsterAccuracy);
         if (EvadesLocked(conn, hitChance, now))
         {
             Console.WriteLine($"[gateway] {remote} monster 0x{id:x} ({m.Label}) evaded: accuracy {monsterAccuracy} " +
-                $"vs evasion {conn.Pools.Evasion}, {hitChance}% chance to hit, entropy {conn.EvasionEntropy:0}");
+                $"vs evasion {evasion}, {hitChance}% chance to hit, entropy {conn.EvasionEntropy:0}");
             return null;
         }
+        GainLifeBeforeEnemyHitLocked(conn, stats);
         // Roll the whole monster-mod packet (the Gambler's incoming luck included), then mitigate each component
         // with this hit's one armour decision.
         var gambler = GamblerFor(stats);
         var rolled = gambler.RollIncomingHit(a.Damage, conn.IncomingHitRandom);
         rolled = MonsterModHit(m, rolled, conn.PlayerLife, conn.PlayerMaxLife, conn.IncomingHitRandom, out bool monsterCritical,
             () => SelfCriticalReduction(conn));   // its crit, Executioner's
+        // The player's passive enemy auras (Born under Fire): the hit and its ailment base convert alike, so ignite
+        // sees the converted damage. Converting does not remove stun, so the hit recovery below reads a.Damage.
+        var baseHit = a.Damage;
+        if (EnemyAuraConversionLocked(conn, m, here, now) is { } auraConversion)
+            (rolled, baseHit) = (rolled.Convert(auraConversion), baseHit.Convert(auraConversion));
+        // Glacial Wave: less damage dealt is all of it (PoB Damage MORE), so the ignite its crit puts on you too.
+        double lessened = m.Ailments.ChillDamageDealtFactor(now);
+        if (lessened < 1) (rolled, baseHit) = (rolled.Scale(lessened), baseHit.Scale(lessened));
         var mitigated = gambler.MitigateIncomingHit(rolled, type =>
             new DamageModel.ResistanceValue(Resistance(conn, type), MaxResistance(conn, type)), conn.IncomingHitRandom);
         var immune = PlayerImmunities(conn);
@@ -588,21 +686,20 @@ partial class Program
         // consumes an armour draw; one lazy decision is shared by the whole rolled packet.
         bool blocked = DamageModel.Blocks(conn.Pools.BlockChance, conn.IncomingHitRandom.NextDouble() * 100, conn.Pools.AttackBlockLucky, conn.Pools.AttackBlockUnlucky);
         bool armourRelevant = mitigated.Components.Any(c => !immune.Contains(c.Type)
-            && Math.Round(c.Range.Min) > 0 && (c.Type == DamageType.Physical
-                || c.Type == DamageType.Chaos && conn.Pools.ArmourAppliesToChaosDamage));
+            && Math.Round(c.Range.Min) > 0 && PlayerHitMitigation.ArmourPercent(conn.Pools, c.Type, StatOf) > 0);
         var armour = IncomingArmourLocked(conn, !blocked && armourRelevant, priorContacts, stats);
         int rawDamage = (int)Math.Round(rolled[DamageType.Physical].Min);
         int damage = 0, chaosDamage = 0;
         var ailmentTaken = DamagePacket.Empty;
-        double shockFactor = conn.ElementalAilments.DamageTakenFactor(now);
+        double shockFactor = conn.ElementalAilments.DamageTakenFactor(now, DamageTakenFromBlindedPct(conn, id, stats));
         foreach (var (type, range) in mitigated.Components)
         {
             int value = immune.Contains(type) ? 0 : (int)Math.Round(range.Min);
             value = PlayerHitMitigation.AfterResistance(conn.Pools, type, value,
-                reduction.Physical, reduction.Elemental, armour.EffectiveArmour);
+                reduction.Physical, reduction.Elemental, armour.EffectiveArmour,
+                PlayerHitMitigation.ArmourPercent(conn.Pools, type, StatOf));
             if (type == DamageType.Physical)
-                value = AntiquarianEffects.RangedPhysical(value, a.Ranged,
-                    name => Stats.Key(name) is uint key ? stats.GetValueOrDefault(key) : 0);
+                value = AntiquarianEffects.RangedPhysical(value, a.Ranged, StatOf);
             value = (int)Math.Round(value * shockFactor);
             ailmentTaken = ailmentTaken.Add(type, new(value, value));
             if (type == DamageType.Chaos) chaosDamage += value;
@@ -611,19 +708,29 @@ partial class Program
         damage = FortificationDamageTaken(conn, damage);
         chaosDamage = FortificationDamageTaken(conn, chaosDamage);
         if (blocked) { damage = 0; chaosDamage = 0; }
+        else m.HitPlayerAt = now;
         uint manaBefore = conn.PlayerMana;
-        int gainedLife = blocked ? conn.Pools.LifeGainedOnBlock : 0;
-        int gainedMana = blocked ? conn.Pools.ManaGainedOnBlock : 0;
-        conn.PlayerLife = (uint)Math.Min(conn.PlayerMaxLife, Math.Max(0, (long)conn.PlayerLife - DamagePlayerHit(conn, damage - chaosDamage, chaosDamage, now, stats) + gainedLife));
+        var onBlock = blocked ? BlockRecovery(conn, stats) : default;
+        int gainedLife = blocked ? conn.Pools.LifeGainedOnBlock + onBlock.Life : 0;
+        int gainedMana = blocked ? conn.Pools.ManaGainedOnBlock + onBlock.Mana : 0;
+        long lifeBefore = conn.PlayerLife, lifeDamage = DamagePlayerHit(conn, damage - chaosDamage, chaosDamage, now, stats);
+        conn.PlayerLife = (uint)Math.Min(conn.PlayerMaxLife, Math.Max(0, lifeBefore - lifeDamage + gainedLife));
         conn.PlayerMana = (uint)Math.Min((uint)UnreservedMana(conn), (long)conn.PlayerMana + gainedMana);
+        conn.EnergyShield.Recover(onBlock.EnergyShield);
         TrimLeechLocked(conn);
-        ApplyPlayerAilmentsLocked(conn, a.Damage, ailmentTaken.Select((_, r) =>
+        ApplyPlayerAilmentsLocked(conn, baseHit, ailmentTaken.Select((_, r) =>
             new(FortificationDamageTaken(conn, (int)r.Min), FortificationDamageTaken(conn, (int)r.Max))),
-            monsterCritical, blocked, now, stats);
+            monsterCritical, blocked, now, stats, source: id);
         conn.RecentEnemyHits.Record(now);
         ChargesWhenHit(conn, blocked);
+        // Brine Bound: a hit that lands, blocked too (blocking keeps the defender's when-hit effects, wiki
+        // Blocking), may freeze its monster for 1 s. Its own random keeps the incoming hit's draws in order.
+        if (GameServer.Core.World.RandomRolls.Chance(StatOf("chance_to_freeze_enemies_for_1_second_when_hit_%"), 100, Random.Shared))
+            m.Ailments.Freeze(1, now, StatOf, name => m.Mods.Effects[name]);
         if (conn.PlayerLife == 0) { conn.InvalidateIncomingHits(); ClearAntiquarianOnDeath(conn); }
         RecordHardcoreDeath(conn);
+        bool spirit = m.Rarity == MonsterRarity.Unique
+            && SpiritChieftainsWhenHitLocked(conn, stats, blocked, monsterCritical, Math.Min(lifeBefore, lifeDamage));
         uint life = conn.PlayerLife;
         PlayerRecoveryIntent? recovery = null;
         if (!blocked && !a.Ranged && life > 0 && a.Damage.Components.All(c => c.Type == DamageType.Physical))
@@ -639,7 +746,7 @@ partial class Program
         // its own stun roll; the player's recovery is the authoritative 0x1d1 (SendPlayerHitRecovery).
         var packet = InstanceProtocol.ActionHit(id, 0xffff, PlayerId, flags: MonsterHitFlags(blocked, monsterCritical), kind: 0x03,
             code: HitCode(mitigated), angle: HitAngle(here.X - from.X, here.Y - from.Y));
-        return new(packet, life, conn.PlayerMana, manaBefore, damage, rawDamage, blocked, monsterCritical, recovery, armour);
+        return new(packet, life, conn.PlayerMana, manaBefore, damage, rawDamage, blocked, monsterCritical, recovery, armour, spirit);
     }
 
     // The packets after a committed hit: energy shield, native recovery, the life bar and life, mana, death or flask charges.
@@ -647,6 +754,7 @@ partial class Program
         MonsterHitOutcome hit)
     {
         await SendPlayerEnergyShield(remote, stream, ciphers, conn);
+        if (hit.Spirit) await SendSpiritChieftain(remote, stream, ciphers, conn);
         if (hit.Recovery is not null) await SendPlayerHitRecovery(remote, stream, ciphers, conn, hit.Recovery);
         // At 0 the Life tick stops refreshing the overhead life bar (see Attack): hide it.
         if (hit.Life == 0)
@@ -658,10 +766,46 @@ partial class Program
             $"{(hit.Blocked ? " (blocked)" : "")}, life {hit.Life}/{conn.PlayerMaxLife}{(hit.Life == 0 ? " (dies)" : "")}");
         if (hit.Mana != hit.ManaBefore)
             await SendPlayerMana(remote, stream, ciphers, conn,
-                $"0x01b1 player mana {hit.Mana} ({(hit.Blocked ? $"+{conn.Pools.ManaGainedOnBlock} on block" : "no block gain")})");
+                $"0x01b1 player mana {hit.Mana} ({(hit.Blocked ? $"+{(long)hit.Mana - hit.ManaBefore} on block" : "no block gain")})");
         if (hit.Life == 0)
             await PlayerDied(remote, stream, ciphers, conn, $"0x0055 death screen ({conn.League ?? "?"} league)");
-        else if (!hit.Blocked) await GainFlaskChargesWhenHit(remote, stream, ciphers, conn);
+        else if (!hit.Blocked)
+        {
+            await SendAttackerSlows(remote, stream, ciphers, conn);
+            await GainFlaskChargesWhenHit(remote, stream, ciphers, conn);
+        }
+    }
+
+    internal const string AttackerSlow = "enemies_that_hit_you_with_attack_recently_attack_speed_+%";
+
+    // A monster's attack time now. Devout of Gruthkul: an enemy whose attack hit the player in the last 4 s gets the
+    // player's current reduced attack speed (Pools.AttackerSlowPct), additive with its own increases.
+    internal static double MonsterSwingSeconds(ClientState conn, SpawnedMonster m, double now) =>
+        m.Attack is not { } a ? 0
+        : now - m.HitPlayerAt <= RecentlySeconds ? m.Mods.Effects.AttackSeconds(a.Seconds, conn.Pools.AttackerSlowPct) : a.Seconds;
+
+    // The attack stats on a monster's Stats component (it carries them from its creation, 11-skills.md §6) again when
+    // its attack time changes or goes back, so the client's swing can follow the server's. Called from the player tick
+    // and after a hit.
+    static async Task SendAttackerSlows(string remote, NetworkStream stream, ConnectionCiphers ciphers, ClientState conn)
+    {
+        var changed = new List<(uint Id, double Seconds, IReadOnlyList<(uint, int)> Stats)>();
+        lock (conn.Monsters)
+        {
+            double now = ProjectileWorldTime(conn);
+            bool slows = conn.Pools.AttackerSlowPct != 0;
+            foreach (var (id, m) in conn.Monsters)
+            {
+                if (m.Dead || m.Attack is not { } a || m.SwingSecondsSent is null && (!slows || now - m.HitPlayerAt > RecentlySeconds)) continue;
+                double seconds = MonsterSwingSeconds(conn, m, now);
+                if (seconds == (m.SwingSecondsSent ?? a.Seconds)) continue;
+                m.SwingSecondsSent = seconds == a.Seconds ? null : seconds;
+                changed.Add((id, seconds, (a with { Seconds = seconds }).Stats()));
+            }
+        }
+        foreach (var (id, seconds, stats) in changed)
+            await Send(remote, stream, ciphers, InstanceEntities.StatsUpdate(id, stats),
+                $"0x01b3 monster 0x{id:x} attack time {seconds:0.000} s (enemies that hit you recently)");
     }
 
     // A spawned monster's id from the argument if it is 0x hex, else the last spawned one.

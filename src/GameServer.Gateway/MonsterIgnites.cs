@@ -3,7 +3,9 @@ using GameServer.Core.World;
 /// <summary>
 /// The player's ignites on one monster. Several can be on it at once; only the strongest deals damage, and each keeps its
 /// own expiry, so a weaker, longer one resumes when the strongest ends (PoE 3.x ignite). Guarded by the connection's
-/// Monsters lock; times are projectile-world seconds (<c>ProjectileWorldTime</c>), so pause freezes them.
+/// Monsters lock; times are projectile-world seconds (<c>ProjectileWorldTime</c>), so pause freezes them. Every source
+/// adds here: a hit's chance (<see cref="TryApply"/>) or an ignite a granted skill worked out itself (<see cref="Add"/>,
+/// Abberath's Fury).
 /// </summary>
 sealed class MonsterIgnites
 {
@@ -17,20 +19,31 @@ sealed class MonsterIgnites
 
         /// <summary><paramref name="rows"/>: a context's ailment rows (per minute); <paramref name="get"/>: the merged
         /// caster and skill stats. Base duration 4 s (<see cref="Ailments.IgniteDurationSeconds"/>); never_ignite and
-        /// never_damaging_ailments stop it.</summary>
+        /// never_damaging_ailments stop it. faster_burn_% and damaging_ailments_deal_damage_+%_faster multiply the damage
+        /// per second and divide the duration (wiki Ignite; PoB IgniteBurnFaster).</summary>
         public static Settings From(IEnumerable<(string Stat, int Value)> rows, string hand, Func<string, int> get)
         {
             if (get("never_ignite") != 0 || get("never_damaging_ailments") != 0) return None;
             var r = rows.ToDictionary(x => x.Stat, x => x.Value);
+            double faster = Faster(get);
+            if (faster <= 0) return None;
             double Row(string bound, string kind) =>
-                r.GetValueOrDefault($"{bound}_ignite_damage_to_deal_per_minute_from_{kind}_{hand}_damage") / 60.0;
+                r.GetValueOrDefault($"{bound}_ignite_damage_to_deal_per_minute_from_{kind}_{hand}_damage") / 60.0 * faster;
             long chance = (long)get("base_chance_to_ignite_%") + get("chance_to_freeze_shock_ignite_%");
             double seconds = Ailments.IgniteDurationSeconds
-                * Math.Max(0, 1 + ((double)get("ignite_duration_+%") + get("base_all_ailment_duration_+%")) / 100);
+                * Math.Max(0, 1 + ((double)get("ignite_duration_+%") + get("base_all_ailment_duration_+%")) / 100) / faster;
             return new((int)Math.Clamp(chance, 0, 100), Row("minimum", "non_critical"), Row("maximum", "non_critical"),
                 Row("minimum", "critical"), Row("maximum", "critical"), seconds);
         }
     }
+
+    /// <summary>The "deal damage faster" factor of the attacker's ignites (1 without one).</summary>
+    public static double Faster(Func<string, int> get) =>
+        Math.Max(0, 1 + ((double)get("faster_burn_%") + get("damaging_ailments_deal_damage_+%_faster")) / 100.0);
+
+    /// <summary>The target's base_self_ignite_duration_-% (Fire and Ignite Resistant) on an ignite's duration.</summary>
+    public static double SelfDuration(Func<string, int> target) =>
+        Math.Max(0, 1 - target("base_self_ignite_duration_-%") / 100.0);
 
     readonly record struct Ignite(double From, double Until, double DamagePerSecond);
     readonly List<Ignite> active = [];
@@ -41,8 +54,15 @@ sealed class MonsterIgnites
 
     public bool Burning => active.Count > 0;
 
+    /// <summary>Nothing burns and no buff is shown.</summary>
+    public bool Idle => active.Count == 0 && Buff is null;
+
     /// <summary>When the last of its ignites ends.</summary>
     public double Until => active.Count == 0 ? 0 : active.Max(i => i.Until);
+
+    /// <summary>The strongest ignite's damage per second at <paramref name="now"/> (0 when none burns).</summary>
+    public double PerSecond(double now) =>
+        active.Where(i => i.From <= now && now < i.Until).Select(i => i.DamagePerSecond).DefaultIfEmpty().Max();
 
     /// <summary>A hit that dealt fire damage tries to ignite. Critical hits always do; otherwise the chance rolls, then the
     /// target's avoidance. The damage per second is an independent roll in the context's range, as the incoming
@@ -52,10 +72,15 @@ sealed class MonsterIgnites
         if (immune || settings.Seconds <= 0 || !critical && !RandomRolls.Chance(settings.Chance, 100, random)
             || avoid > 0 && RandomRolls.Chance(avoid, 100, random)) return false;
         var (min, max) = critical ? (settings.CriticalMin, settings.CriticalMax) : (settings.Min, settings.Max);
-        double perSecond = min + (Math.Max(min, max) - min) * random.NextDouble();
-        if (!(perSecond > 0)) return false;
+        return Add(now, min + (Math.Max(min, max) - min) * random.NextDouble(), settings.Seconds);
+    }
+
+    /// <summary>An ignite already worked out (its chance rolled, its damage and duration final). True when added.</summary>
+    public bool Add(double now, double perSecond, double seconds)
+    {
+        if (!(perSecond > 0) || !(seconds > 0)) return false;
         if (active.Count == 0) { last = now; carry = 0; }
-        active.Add(new(now, now + settings.Seconds, perSecond));
+        active.Add(new(now, now + seconds, perSecond));
         return true;
     }
 

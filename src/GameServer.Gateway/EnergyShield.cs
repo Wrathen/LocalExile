@@ -24,6 +24,12 @@ sealed class EnergyShield
         return amount - (int)absorbed;
     }
     public void Empty() { Current = 0; fraction = 0; Recharging = false; }
+    /// <summary>Instant recovery (Kiloava's Leadership on block), up to the maximum.</summary>
+    public void Recover(uint amount)
+    {
+        Current = (uint)Math.Min(Maximum, (long)Current + amount);
+        if (Current == Maximum) { fraction = 0; Recharging = false; }
+    }
     // Leech/gain does not start recharge or reset its interruption timer.
     public void Gain(double amount)
     {

@@ -54,5 +54,34 @@ Items keep the Roadmap's priority groups, and are in rough priority order within
 - **Known:** Aristocrat's nodes all have server consumers and Gateway coverage; `Game_VERIFIED_ARISTOCRAT=1` opts in.
   **Next:** native acceptance on a client with the reviewed combined graph, as for Gambler.
   See [Aristocrat](../docs/game/aristocrat.md).
+- **Known:** Ancestral Commander's defensive, warcry, strike, enemy-aura, Spirit and totem nodes have server
+  consumers (Deathrattle, Ancestral Reach and Echo, the Spirits and the totem nodes partly: the Projectile Strike gems
+  have no melee hit, the chieftains use only their first skill, Kahuturoa waits for monster crits, only Rejuvenation
+  Totem places a totem, and monsters do not attack totems);
+  `Game_VERIFIED_ANCESTRAL_COMMANDER=1` opts in.
+  **Next:** a live check of the strikes (Ancestral Echo's client side), Born under Fire, the Spirit buffs, the fighting
+  chieftains and the totems; Spirit of Rakiata once Marks exist, the chieftains' other skills once monsters use more
+  than one, Kahuturoa once monsters have their own crit chance, the strike nodes once Projectile Strikes have their
+  melee hit, and other totem skills; then native acceptance.
+  See [Ancestral Commander](../docs/game/ancestral-commander.md).
+- **Known:** Paladin's nodes all have server consumers and Gateway coverage; `Game_VERIFIED_PALADIN=1` opts in.
+  **Next:** native acceptance on a client with the reviewed combined graph, as for Gambler. Field Medicine still
+  lacks a phasing minion's walk (the client's phasing filter is not traced) and the rule for flask damage on a
+  relic's explosion. The ordinary Guardian's Unwavering Crusade (19641) uses the same relic code and needs its own
+  live check.
+  See [Paladin](../docs/game/paladin.md).
+- **Known:** every Polytheist node has a consumer or a documented engine gap.
+  `Game_VERIFIED_POLYTHEIST=1` opts in.
+  **Next:** native acceptance on a client with the reviewed combined graph (including Gruthkul's slowed swing
+  animation, the point the client sends for a Nova with Lunaris, Solaris's blind on monsters, and Abberath's explosion
+  art, radius and display buff).
+  Yugul, Corrupted Blood immunity and Garukhan's ground immunity need curses, reflected damage, Corrupted Blood and
+  hazardous ground first.
+  See [Polytheist](../docs/game/polytheist.md).
+- **Known:** Surfcaster's fishing-rod notables, Sea Legs, Stormy Seas, Ghost of the Deep, Changing Seasons, Brine
+  Bound, Glacial Wave, Within the Tempest and the small nodes' cast speed and monster flee have server consumers;
+  `Game_VERIFIED_SURFCASTER=1` opts in.
+  **Next:** native acceptance on a client with the reviewed combined graph.
+  See [Surfcaster](../docs/game/surfcaster.md).
 - **Done when:** quest rewards persist and the native Altar can choose an ordinary ascendancy, with real-client checks.
   Implementing all 19 Phrecia classes' special gameplay is separate from this selection lifecycle.

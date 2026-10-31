@@ -17,7 +17,8 @@ readonly record struct SingleUseCooldown(int BaseMilliseconds, int RecoveryPerce
     {
         int ms = skills.CooldownMs(effect, level);
         if (ms <= 0 || skills.CooldownUses(effect, level) != 1
-            || skills.CooldownPausesWhileActive(effect) || !skills.IsSpell(effect) && !skills.IsAttack(effect)) return null;
+            || skills.CooldownPausesWhileActive(effect)
+            || !skills.IsSpell(effect) && !skills.IsAttack(effect) && !skills.IsWarcry(effect)) return null;
         int Get(IReadOnlyDictionary<uint, int> values, string name) => catalog.Key(name) is uint key ? values.GetValueOrDefault(key) : 0;
         if (Unsupported.Any(name => Get(player, name) != 0 || Get(own, name) != 0)
             || Get(player, "virtual_total_cooldown_count") > 1 || Get(player, "base_cooldown_count") > 1
@@ -25,6 +26,9 @@ readonly record struct SingleUseCooldown(int BaseMilliseconds, int RecoveryPerce
         // The player's virtual total already includes its base input. Skill inputs are separate, including quality.
         long recovery = (long)Get(player, "virtual_cooldown_speed_+%")
             + Get(own, "base_cooldown_speed_+%") + Get(own, "virtual_cooldown_speed_+%");
+        // Warcry recovery is an increase for the Warcry type (PoB ModParser); the client adds it when is_warcry (0x14281dfa0).
+        if (skills.IsWarcry(effect))
+            recovery += (long)Get(player, "warcry_cooldown_speed_+%") + Get(own, "warcry_cooldown_speed_+%");
         // Native construction adds 100 in a signed i32. Zero recovery stalls rather than reversing the clock.
         return new(ms, (int)Math.Clamp(recovery, -100, int.MaxValue - 100));
     }

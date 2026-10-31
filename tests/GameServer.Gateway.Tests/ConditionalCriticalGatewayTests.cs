@@ -138,7 +138,7 @@ public partial class ConditionalCriticalGatewayTests
             var gem = Assert.Single(gems, g => g.Id == Skill);
             return ((Task)Method("AreaSkillHit").Invoke(null,
                 ["accuracy-area-contact-test", writer.GetStream(), ciphers, Conn, Skill, gem, (32, 32), (34, 32),
-                    false, (ushort)0, Conn.ActionCount, null, null, 1.0, 0u, null, null])!).WaitAsync(TimeSpan.FromSeconds(5));
+                    false, (ushort)0, Conn.ActionCount, null, null, 1.0, 0u, null, null, 0u])!).WaitAsync(TimeSpan.FromSeconds(5));
         }
 
         public async Task Launch((int X, int Y)? aim = null)

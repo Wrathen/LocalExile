@@ -222,6 +222,8 @@ client and server walk at the same speed. `ApplyMovementSpeed` runs on login, le
 `/set_speed` adds its percentage on top of the passive total.
 Only unconditional `increased Movement Speed` passives are modelled: action speed, more multipliers, gear/buff
 `movement_velocity_+%`, conditional nodes and the `movement_velocity_cap` constant are not applied yet.
+`movement_speed_cannot_be_reduced_below_base` bounds the total below by 0 (PoB `max(MovementSpeedMod, 1)`).
+The client's lower bound for `movement_velocity_+%` is 0 instead of -100 from the same raw flag (`0x14251cbd0`).
 
 **Compact int** (writer `0x141fa3c50`): signed, 1 byte for −0x40..0x3f (value & 0x7f), else 2/3/4 bytes with first-byte
 prefixes 0x80/0xc0/0xe0 carrying the top 6/5/4 bits, else 0xf0 + 4 bytes; big-endian (`InstanceProtocol.CompactInt`).

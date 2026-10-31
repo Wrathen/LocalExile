@@ -101,7 +101,7 @@ public class RageGatewayTests
             var gem = ActiveGem(Conn);
             return (Task)typeof(Program).GetMethod("AreaSkillHit", BindingFlags.Static | BindingFlags.NonPublic)!
                 .Invoke(null, ["rage-sweep-test", Stream, Ciphers, Conn, Skill, gem,
-                    (100, 100), (105, 100), true, (ushort)1, Conn.ActionCount, null, null, 1.0, 0u, null, null])!;
+                    (100, 100), (105, 100), true, (ushort)1, Conn.ActionCount, null, null, 1.0, 0u, null, null, 0u])!;
         }
 
         public async Task ObserveLife()

@@ -242,6 +242,12 @@ static class PanelStats
         return result;
     }
 
+    /// <summary>One display stat's sum as <see cref="Compute"/> gives it, from raw stats (a skill's own); a stat with no
+    /// row is its own value.</summary>
+    public static int Of(string display, Func<string, int> get) =>
+        Sums.FirstOrDefault(s => s.Display == display && s.Hand == Hand.None && !s.Flag) is { } sum
+            ? (int)Math.Clamp(get(display) + sum.Sources.Sum(s => (long)get(s.Name) * s.Mul / s.Div), int.MinValue, int.MaxValue)
+            : get(display);
     static long RawSum(Sum sum, Func<string, int> get, Func<string, int>? local, int level) =>
         get(sum.Display) + Total(sum.Sources, get, level) + Total(sum.Local, local, level);
 
@@ -449,6 +455,15 @@ static class PanelStats
         result.Add(("mana_recovery_per_minute", mana));
         return result;
     }
+
+    /// <summary>The recovery inputs with the "while moving" stats added while the player moves (Devout of Garukhan; PoB
+    /// Condition Moving). Only the recovery finals read them; the raw inputs the player stats carry stay unchanged.</summary>
+    public static Func<string, int> WhileMoving(Func<string, int> get, bool moving) => !moving ? get : name => get(name) + name switch
+    {
+        "life_regeneration_rate_per_minute_%" => get("life_regeneration_rate_per_minute_%_while_moving"),
+        "mana_regeneration_rate_+%" => get("mana_regeneration_rate_+%_while_moving"),
+        _ => 0,
+    };
 
     static int RecoveryValue(double rate) => (int)Math.Clamp(Math.Round(rate), int.MinValue, int.MaxValue);
 

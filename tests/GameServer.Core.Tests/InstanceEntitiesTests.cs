@@ -399,6 +399,9 @@ public class InstanceEntitiesTests
         // Flags bit1 (u32 +0x68) and bit7 (f32 +0x6c) come right after the flags, before the stat values.
         Assert.Equal("01C1" + "00001000" + "00000000" + "0000" + "0002" + "0005" + "00001000" + "0000" + "82" + "00000BB8" + "40400000" + "00000578" + "00000000",
             Convert.ToHexString(InstanceEntities.AddBuff(0x1000, 2, 5, 0x1000, values: [1400], u68: 3000, f6c: 3f)));
+        // chilled (row 1, +0xff and IsRecovery): the +0x82 u16 sits between the flag fields and the stat value.
+        Assert.Equal("01C1" + "00000101" + "00000000" + "0000" + "0003" + "0001" + "00001000" + "0000" + "00" + "001E" + "0000001E" + "00000000",
+            Convert.ToHexString(InstanceEntities.AddBuff(0x101, 3, 1, 0x1000, values: [30], u82: 30)));
     }
 
     [Fact]

@@ -4,7 +4,7 @@ partial class Program
 {
     internal static readonly GemSupports Supports = new();
     sealed record SupportedGem(int Effect, int Level, int Quality, IReadOnlyList<GemSupports.Applied> Supports,
-        Dictionary<uint, int> Stats, Item? SourceGem = null, bool RequirementsMet = true);
+        Dictionary<uint, int> Stats, Item? SourceGem = null, bool RequirementsMet = true, bool Granted = false);
 
     static SupportedGem SupportedSkill(ClientState conn, ushort skillId)
     {
@@ -24,10 +24,13 @@ partial class Program
         var active = places
             .Where(p => !conn.Ruthless || ItemsFor(conn).ByHash(p.Gem.TypeHash) is { } type && RuthlessGemRules.AllowsBase(type.Id))
             .SelectMany(p => ItemsFor(conn).GemEffects(p.Gem).Select(e => (Place: p, Effect: e))).ToList();
+        var granted = GrantedSkillsOf(conn);
         var ids = GemSkillIdsOf.GetOrAdd(name, _ => new GemSkillIds()).Assign(
-            [.. active.Select(g => new GemSkillIds.Gem(g.Place.ItemId, g.Place.Socket, g.Effect))], GemSkillIdPool.Value);
+            [.. active.Select(g => new GemSkillIds.Gem(g.Place.ItemId, g.Place.Socket, g.Effect)),
+                .. granted.Select(g => new GemSkillIds.Gem(g.Host, 0, g.Effect))], GemSkillIdPool.Value);
         int index = Enumerable.Range(0, ids.Count).FirstOrDefault(i => ids[i] == skillId, -1);
         if (index < 0) return new(-1, 1, 0, [], []);
+        if (index >= active.Count) return GrantedSupportedSkill(conn, granted[index - active.Count]);
         var selected = active[index];
         // Vaal source/support eligibility must not inherit an earlier equipment notification's cached pools.
         if (requirements is null && SkillsFor(conn).VaalBudget(selected.Effect, ItemsFor(conn).GemLevel(selected.Place.Gem)) is not null)
@@ -68,13 +71,13 @@ partial class Program
             {
                 string stat = Stats.Name(key) ?? "";
                 if (stat is "base_spell_cast_time_ms" or "virtual_base_spell_cast_time_ms" or "hundred_times_casts_per_second"
-                    or "casting_spell" or "base_mana_cost" or "mana_cost") continue;
+                    or "casting_spell" or "base_mana_cost" or "mana_cost" or "base_mana_cost_per_minute" or "mana_cost_per_minute") continue;
                 own[key] = stat.EndsWith("_final", StringComparison.Ordinal) && own.TryGetValue(key, out int previous)
                     ? (int)Math.Round(100 * ((1 + previous / 100.0) * (1 + value / 100.0) - 1))
                     : own.GetValueOrDefault(key) + value;
             }
         double costMultiplier = supports.Aggregate(1.0, (v, s) => v * s.CostMultiplier / 100.0);
-        foreach (string stat in new[] { "mana_cost", "base_mana_cost" })
+        foreach (string stat in new[] { "mana_cost", "base_mana_cost", "mana_cost_per_minute", "base_mana_cost_per_minute" })
             if (Stats.Key(stat) is uint k && own.TryGetValue(k, out int cost)) own[k] = (int)Math.Floor(cost * costMultiplier);
         // Global added damage on support gems applies to this skill, not to the character or other link groups.
         foreach (string type in new[] { "physical", "fire", "cold", "lightning", "chaos" })
@@ -190,7 +193,7 @@ partial class Program
             melee: inputs.Melee, area: inputs.Area, projectile: inputs.Projectile,
             supportModifiers: inputs.Modifiers, skillTypes: inputs.Types,
             wieldingWand: inputs.WieldingWand, retaliation: inputs.Attack && inputs.Types.Contains(120));
-        if (inputs.Attack) hit = RageStats.ApplyAttack(hit, inputs.Get);
+        if (inputs.Attack) hit = MaximumAttackDamage.Apply(RageStats.ApplyAttack(hit, inputs.Get), inputs.Get);
         return suppress ? new SkillDamageContext(inputs.Plan.Kind, inputs.Caster).Hit(hit) : hit;
     }
 
@@ -219,7 +222,8 @@ partial class Program
     // A release retains the unprohibited offensive chance; the hit evaluates current owner prohibitions separately.
     static int SupportedReleaseCriticalChance(ClientState conn, ushort skillId) => SupportedCriticalChanceFor(conn, skillId, true);
 
-    static int SupportedCriticalChanceFor(ClientState conn, ushort skillId, bool release)
+    // extraIncrease: a target condition's increase (critical_strike_chance_+%_vs_blinded_enemies, Program.Blind).
+    static int SupportedCriticalChanceFor(ClientState conn, ushort skillId, bool release, long extraIncrease = 0)
     {
         var gem = SupportedSkill(conn, skillId);
         var hitPlan = SkillHitPlan.ForSkill(SkillsFor(conn), gem.Effect, gem.Level, gem.Quality);
@@ -236,12 +240,12 @@ partial class Program
             var weapon = WeaponProfileFor(conn, activeSet: true);
             int basis = weapon.Unarmed && (!SkillsFor(conn).IsMelee(gem.Effect) || SkillsFor(conn).IsSpell(gem.Effect)) ? 0
                 : AttackBaseCriticalStrike.OfMainHand(!weapon.Unarmed, weapon.Critical, Player);
-            long increased = conn.Pools.CriticalStrikeChancePct
+            long increased = conn.Pools.CriticalStrikeChancePct + extraIncrease
                 + AttackBaseCriticalStrike.IncreasedSum(weapon, name => Own(name));
-            return AttackBaseCriticalStrike.ChanceOfBase(basis, increased, Player, Own);
+            return DisplayedCriticalChance(conn, AttackBaseCriticalStrike.ChanceOfBase(basis, increased, Player, Own), Player);
         }
-        return SpellCriticalStrike.Chance(SkillsFor(conn).SpellCritChance(gem.Effect, gem.Level),
-            Player, Own, conn.Pools.SpellCriticalStrikeChancePct);
+        return DisplayedCriticalChance(conn, SpellCriticalStrike.Chance(SkillsFor(conn).SpellCritChance(gem.Effect, gem.Level),
+            Player, Own, conn.Pools.SpellCriticalStrikeChancePct + extraIncrease), Player);
     }
 
     static (int Flat, int Percent)? SupportedReservation(ClientState conn, ushort skillId)

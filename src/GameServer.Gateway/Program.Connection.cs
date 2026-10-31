@@ -227,9 +227,7 @@ partial class Program
                 Console.WriteLine($"[gateway] {remote} unsaved progress not saved at disconnect (kept for the next save): {ServerLog.Describe(e)}");
             }
             ForgetRuthlessVitalsAdmission(left);
-            // The instance keeps its monsters as they are now, for the next connection (#12).
-            if (left.MonstersPlaced)
-                lock (left.Monsters) left.Instance.Monsters = SavedMonster.Save(left.Monsters.Values, left.Clock.Elapsed.TotalSeconds, MonsterEmerge.Unrisen(left));
+            if (left.MonstersPlaced) KeepInstanceMonsters(left);
             left.Instance.RemovePlayer(left.PeerId);
             Instances.Leave(left.Instance);
         }

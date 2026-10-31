@@ -113,10 +113,19 @@ sealed class SpawnedMonster(string label, WalkEstimator walk, int aggroRange, in
     public double Burn;
     // Life regeneration not yet applied (fractions of a point between ticks; RegenerateMonsters).
     public double Regen;
+    // When the player last hit it (Clock seconds): "enemies you've Hit Recently". Reset at the player's death.
+    public double PlayerHitAt = double.NegativeInfinity;
+    // When its attack last hit the player (Clock seconds; evaded and blocked attacks do not hit): "enemies that have Hit
+    // you with an Attack Recently". Reset at the player's death. Guarded by the Monsters lock.
+    public double HitPlayerAt = double.NegativeInfinity;
+    // The attack time its Stats component carries on the client (SendAttackerSlows), when it differs from Attack.Seconds.
+    public double? SwingSecondsSent;
     // Impales retained for consumption/expiry, including on a corpse (Impale.cs).
     public readonly ImpaleState Impale = new();
     // The player's ignites on it (MonsterIgnites.cs), under the Monsters lock.
     public readonly MonsterIgnites Ignites = new();
+    // The chill, freeze and shock the player's hits have put on it (MonsterElementalAilments); kept on the corpse.
+    public readonly MonsterElementalAilments Ailments = new();
     // All outgoing attacks share this defender's sequence, under the Monsters lock. A new spawn starts fresh.
     public readonly GameServer.Core.World.EvasionEntropy AttackEvasion = new();
     // While a swing runs (Clock seconds) the monster neither chases nor swings again.
@@ -125,6 +134,17 @@ sealed class SpawnedMonster(string label, WalkEstimator walk, int aggroRange, in
     // SwingGeneration identifies ordinary attack recovery so canceling it does not clear an emerge or boss stage.
     public int ActionGeneration;
     public int? SwingGeneration;
+    // The player's debuffs on it (Program.EnemyDebuffsTick, under the Monsters lock): taunted by him until when (Clock
+    // seconds) with the taunted buff shown and the end it shows, his passives' enemy auras (BuffDefinitions row → buff
+    // instance), and the increased damage taken they give (every type; fire, cold and lightning) that its hits read.
+    public double TauntedUntil = double.NegativeInfinity, TauntShownUntil;
+    public ushort TauntBuff;
+    public readonly Dictionary<ushort, ushort> PlayerAuras = [];
+    public (int All, int Elemental) TakenFromPlayer;
+    // Fleeing (MonsterFlee): from a hit's roll until its walk to the flee point ends; FleeTo is the point until the AI
+    // orders that walk.
+    public bool Fleeing;
+    public (int X, int Y)? FleeTo;
     public string Label => label;
     public WalkEstimator Walk { get; set; } = walk;
     public int AggroRange => aggroRange;
@@ -135,6 +155,8 @@ sealed class SpawnedMonster(string label, WalkEstimator walk, int aggroRange, in
     // Guarded by the Monsters lock.
     public double FlinchUntil = double.NegativeInfinity;
     public bool Aggro, Dead;
+    // Its corpse was consumed (Deathrattle's explosion) and its object removed. Guarded by the Monsters lock.
+    public bool CorpseConsumed;
     // Soul credit alone is idempotent; this does not alter existing XP, loot, quest or charge policy.
     public bool SoulKillProcessed;
     public (int X, int Y)? CollisionPosition;
@@ -393,6 +415,8 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     public double SentAdrenalineUntil = double.NaN;
     public double SentStunRecoveryUntil = double.NaN;
     public ushort WardBuff, AdrenalineBuff;
+    /// <summary>The passive self buffs published on the player: BuffDefinitions row → buff instance (PassiveBuffAuras).</summary>
+    public readonly Dictionary<ushort, ushort> PassiveBuffs = [];
     // The stats the server has set on the player after creating it (/set_stat, /set_speed): what the client computes
     // with, so the server can follow it (attack time).
     public readonly Dictionary<uint, int> PlayerStats = [];
@@ -486,11 +510,30 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     /// <summary>One change of the flask bar and its S→C 0xbf at a time (Program.ChangeFlaskBar), so the revisions go out in
     /// order with the latest charges.</summary>
     public SemaphoreSlim FlaskBarGate { get; } = new(1, 1);
-    /// <summary>The smoke clouds, consecrated ground and taunts of flasks (FlaskGrounds).</summary>
+    /// <summary>The smoke clouds and consecrated ground of flasks (FlaskGrounds).</summary>
     public FlaskGrounds.State FlaskGrounds { get; } = new();
+    /// <summary>Each Strike skill's last use, for Ancestral Echo (StrikeTargets.Memory). Guarded by the Monsters lock.</summary>
+    public StrikeTargets.Memory StrikeLocations { get; } = new();
+    /// <summary>The Spirit chieftain skills' shared cooldown and Leadership buff (SpiritChieftains). Guarded by the Monsters
+    /// lock.</summary>
+    public SpiritChieftains SpiritChieftains { get; } = new();
+    /// <summary>The player's summoned totems (Program.Totems.cs), kept apart from <see cref="Monsters"/>. Guarded by the
+    /// Monsters lock.</summary>
+    public TotemState Totems { get; } = new();
+    /// <summary>The player's enemy auras and taunt increase, from the stats last sent (Program.EnemyDebuffsTick).</summary>
+    public volatile EnemyDebuffs EnemyDebuffs = EnemyDebuffs.None;
+    /// <summary>The monsters a passive's blind aura blinds (PassiveBuffAuras.BlindState, Program.EnemyDebuffsTick).</summary>
+    public PassiveBuffAuras.BlindState BlindAura { get; } = new();
     /// <summary>Whether the player phases (a Quartz Flask runs): the walk estimate walks through monsters (Blockers).</summary>
     public volatile bool Phasing;
-    public ushort NextBuff = 1;
+    /// <summary>The next buff instance (S→C 0x1c1). It wraps back to 1 below the monster ailments' fixed instances
+    /// (MonsterElementalAilments.Instance) and never hands out 0.</summary>
+    public ushort NextBuff
+    {
+        get => nextBuff;
+        set => nextBuff = value is 0 or >= MonsterElementalAilments.FirstInstance ? (ushort)1 : value;
+    }
+    ushort nextBuff = 1;
     public uint PlayerMaxLife => Pools.Life;
     // The player's life as the server keeps it (PlayerObject's Life, full on creation); 0 = dead.
     public bool AuraDeathHandled;
@@ -567,6 +610,7 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     // Whether the open dialogue shows an NPCTalk row's talk (0x84 with its index) rather than the option list.
     public volatile bool InNpcTalk;
     public uint TutorialSceneId, TutorialChestId;
+    public int TutorialChestOpening;   // 1 once this connection opened the support gem chest (OpenTutorialChestCore)
     // a1q4 in The Mud Flats (GlyphQuest): the captured layout, the nests by object id (guarded by itself), the wall and the waterfall.
     public GlyphQuest.Layout? Glyphs;
     public readonly Dictionary<uint, GlyphQuest.Nest> GlyphNests = [];

@@ -644,8 +644,7 @@ partial class Program
                             $"(run live.ps1 -Walkmaps): spawn ({conn.Layout.SpawnX}, {conn.Layout.SpawnY}){(conn.Layout.Walkable is null ? ", no walk map either: the player may stand outside the map" : "")}");
                     RecordVisit(conn);
                     await SendPlayer(remote, stream, ciphers, conn);
-                    conn.PlayerSent = true;
-                    await StartGracePeriod(remote, stream, ciphers, conn);
+                    await PlayerEnteredArea(remote, stream, ciphers, conn);
                     await SendWaypoints(remote, stream, ciphers, conn);
                     uint gold = PersonalStashOf(conn).Gold;
                     await Send(remote, stream, ciphers, InstanceEntities.Gold(gold), $"0x02a9 gold: {gold} (account, {conn.League ?? "Standard"})");
@@ -688,11 +687,13 @@ partial class Program
                     _ = ContinueTour(remote, stream, ciphers, conn);
                     _ = RunLivingCollisions(remote, stream, ciphers, conn);
                     _ = RunPlayerTick(remote, stream, ciphers, conn);
+                    _ = RunFootstepSkills(remote, stream, ciphers, conn);
                     _ = RunResourceRecovery(remote, stream, ciphers, conn);
                     _ = RunCharges(remote, stream, ciphers, conn);
                     _ = RunFortification(remote, stream, ciphers, conn);
                     _ = RunRage(remote, stream, ciphers, conn);
                     _ = RunFlaskChargeRegen(remote, stream, ciphers, conn);
+                    _ = RunPlayerMinions(remote, stream, ciphers, conn);
                 }
             }
         }

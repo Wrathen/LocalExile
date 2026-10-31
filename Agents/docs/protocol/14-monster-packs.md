@@ -120,7 +120,8 @@ The Tidal Island seed 1 (live 2026-10-25): `medicine_boat_1` captured at (138, 3
   / MonsterRare2 "148% / 390% more maximum Life", and "Additionally magic / rare monsters receive a life multiplier
   based on their level", whose tables match these two for all 100 levels. A rare Hungry Corpse at level 70 has
   4.9 × 2 × its base life.
-- **Hits:** DefaultMonsterStats `Damage` × DamageMultiplier × the attack time in seconds (unless MonsterTypes
+- **Hits:** DefaultMonsterStats `Damage` (`MinionDamage` for an IsPlayerMinion MonsterTypes row, PoB's
+  `monsterAllyDamageTable`) × DamageMultiplier × the attack time in seconds (unless MonsterTypes
   `BaseDamageIgnoresAttackSpeed`), spread ± MonsterTypes `DamageSpread`; then the rarity's monster mods:
   `monster_rarity_damage_+%_final` (magic 30, rare 50, unique 70) and
   `monster_rarity_attack_cast_speed_+%_and_damage_-%_final` (20, 33, 33: that much faster, that much less damage per
@@ -178,22 +179,27 @@ cells/s, a normal one every 0.125–0.133 s; the server walks it at the same spe
 | `physical_damage_%_to_add_as_fire` / `_cold` / `_lightning`, `non_chaos_damage_to_add_as_chaos_damage_%` | extra damage of that type in its hit, through the player's resistances |
 | `attack_speed_+%` (`base_cast_speed_+%` is the same on every mod) | its attack time |
 | `base_movement_velocity_+%` | its walk, on the client and in the server's estimate |
-| `base_*_damage_resistance_%`, `base_resist_all_elements_%` | the player's hits and Righteous Fire's burn, per type, capped at 75% |
+| `base_*_damage_resistance_%`, `base_resist_all_elements_%` | the player's hits, Righteous Fire's burn and the player's ignites, per type, capped at 75% |
+| `base_self_ignite_duration_-%` | the player's ignites on it last that much less (Fire and Ignite Resistant: 80%; [20](20-damage.md) §3) |
 | `base_additional_physical_damage_reduction_%` | the physical part of the player's hits (capped at 75%) |
 | `base_damage_taken_+%`, `rare_monster_mod_spell_damage_taken_+%_final` | the player's hits (the second only spell hits: the stat has no description, so it is not taken to cover Righteous Fire's burn) |
 | `monster_base_block_%` | blocks the player's attacks: rolled before the hit, a blocked one has no damage, impale, flinch or 0x1af (the client has no block result we know); the log says "blocked" |
 | `evasion_rating_+%`, `accuracy_rating_+%` | the player's chance to hit it, its chance to hit the player |
-| `always_crit` | its critical strikes (monster attacks have no base chance; × 130% less the player's `base_self_critical_strike_multiplier_-%`, at least 100%) |
+| `always_crit` | its critical strikes (monster attacks have no base chance; × 130% less the player's `base_self_critical_strike_multiplier_-%`, at least 100%). An override: the client's effective chance (`FUN_14275c050`) is 10000 under `virtual_always_crit` before any increase, so reduced critical strike chance (Devout of Solaris) does not lower it |
 | `hit_damage_+%_per_10%_missing_enemy_life` | its hit on a wounded player |
 | `self_take_no_extra_damage_from_critical_strikes` | the player's critical hits deal their normal damage |
 | `cannot_have_life_leeched_from` | prevents Life-source leech from accepted player hits; does not prevent Mana/native ES leech (damage §5b) |
 | `cannot_have_energy_shield_leeched_from` | prevents native and Ghost Reaver converted ES leech; leaves Mana available (damage §5b) |
-| `life_regeneration_rate_per_minute_%` | it regains life (a 0.5 s server tick, 0x1b1) |
+| `life_regeneration_rate_per_minute_%` | it regains life (a 0.5 s server tick, 0x1b1); the player's `enemy_life_regeneration_rate_+%_for_4_seconds_on_hit` scales it for 4 s after each player hit ([Polytheist](../game/polytheist.md)) |
 | `base_cannot_be_stunned` | no hit reaction (the flinch is the hit's stun) |
+| `chill_effectiveness_on_self_+%`, `base_self_freeze_duration_-%` (of the Ice), `shocked_effect_on_self_+%` (of the Tempest) | the player's chill and shock effect and freeze duration on it ([20](20-damage.md#outgoing-chill-freeze-and-shock-on-monsters)) |
+| `action_speed_cannot_be_reduced_below_base`, `movement_speed_cannot_be_reduced_below_base` (Unstoppable) | the player's chill and freeze do not slow or stop it |
+| `reflect_non_damaging_ailments_%_chance` (Mirrored) | the chill, freeze and shock a player hit inflicts on it act on the player too |
+| `monster_chance_to_not_flee_%` (the rarity's MonsterMagic7 50, MonsterRare7 and MonsterUnique7 100) | its chance to ignore a player hit's flee ([11](11-skills.md) §6) |
 
 **Unsupported mods do not roll.** 37 of the 111 can be honoured: 31 fully (every stat acts, or only stops what the
-server never does to monsters: Hexproof, of Congealment, Unstoppable, Mirrored, Reflector's, the ailment parts of the
-resistance mods) and 6 in part (of Flames / of Rime / of Electricity: the extra damage without the exposure on hit; of
+server never does to monsters: Hexproof, of Congealment, Reflector's, the wither parts of the resistance mods) and 6
+in part (of Flames / of Rime / of Electricity: the extra damage without the exposure on hit; of
 Haste / of Damaging: the aura reaches only the monster itself; of Precision: its accuracy, not its increased critical
 strike chance, which raises a base of 0). The other 74 need a system the server does not have: an aura or buff without
 stats of its own, a granted or retaliation skill, a monster or ground on death, ailments, curses, blind or stun on the

@@ -58,10 +58,13 @@ partial class Program
     internal static bool RollCriticalStrike(ClientState conn, int chance, IReadOnlyDictionary<uint, int>? own = null,
         bool attack = true, SkillCriticalRoll? skillRoll = null)
     {
-        if (chance <= 0) return false;
+        if (chance <= 0 && !HoldingFishingRod(conn)) return false;
         lock (conn.Monsters)
         {
             var player = CharacterPlayerStats(conn);
+            if (AlwaysCritical(conn, name => Stats.Key(name) is uint key ? player.GetValueOrDefault(key) : 0))
+                return !CriticalProhibitedBy(player, attack, own);
+            if (chance <= 0) return false;
             int allowedChance = CriticalProhibitedBy(player, attack, own) ? 0 : chance;
             return skillRoll is not null ? skillRoll.Check(allowedChance, conn.CriticalRandom)
                 : CriticalStrikePolicy.Roll(allowedChance, conn.CriticalRandom, CriticalExtraRollsFor(conn, player, own));
@@ -79,6 +82,18 @@ partial class Program
             return new(CriticalExtraRollsFor(conn, CharacterPlayerStats(conn), own));
         }
     }
+
+    // Baited Breath (always_crit_while_holding_fishing_rod): while holding a Fishing Rod every hit is a critical strike
+    // without a roll, whatever its base chance; a cannot-crit prohibition still wins (wiki). The client's
+    // virtual_always_crit calculator (0x14275ba00) reads the stat only for main_hand_weapon_type 15; PoB: CritChance
+    // OVERRIDE 100.
+    static bool AlwaysCritical(ClientState conn, Func<string, int> get) =>
+        get("always_crit_while_holding_fishing_rod") != 0 && HoldingFishingRod(conn);
+
+    // The chance the panel shows under it: 100% where the hit could crit at all; a 0% base still shows 0 although its
+    // hits crit (wiki Baited Breath). Prohibited chances are already 0.
+    static int DisplayedCriticalChance(ClientState conn, int chance, Func<string, int> get) =>
+        chance > 0 && AlwaysCritical(conn, get) ? 10_000 : chance;
 
     internal static int AttackCriticalMultiplier(ClientState conn, IReadOnlyDictionary<uint, int> player,
         int effect = -1, IReadOnlyDictionary<uint, int>? own = null)

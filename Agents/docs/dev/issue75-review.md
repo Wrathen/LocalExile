@@ -224,7 +224,7 @@ independent random misses, reusing entropy for confirmation, or re-reading bow s
 retain known errors or alter established flight semantics. Gem projectile accuracy requires continuation
 through evaded collisions, including pierce/return; implement that separately instead of terminating
 evaded gem arrows as zero-damage impacts. These decisions, primary GGG/pinned PoB evidence and remaining
-source/panel/native work are also in [damage §2g](../protocol/20-damage.md#2g-ordinary-attack-evasion-and-critical-confirmation).
+source/panel/native work are also in [damage §2h](../protocol/20-damage.md#2h-ordinary-attack-evasion-and-critical-confirmation).
 Parent Gateway 39900/Auth 45972/Patch 56752 remain active and were left alone.
 
 ## Accuracy sources and selected support inputs
@@ -251,7 +251,7 @@ files. Counts alone remain insufficient to mark a stat complete.
 Decision: keep the exact actor base instead of adding support flat values to an already increased result or
 reconstructing a lost base from a floored result. Apply the existing whole-source override policy, instead of
 stacking a developer value on top of Precision/equipment. [Skills §4](../protocol/11-skills.md) and
-[damage §2g](../protocol/20-damage.md#2g-ordinary-attack-evasion-and-critical-confirmation) record these decisions,
+[damage §2h](../protocol/20-damage.md#2h-ordinary-attack-evasion-and-critical-confirmation) record these decisions,
 alternatives and pinned PoB/native-catalog evidence. Gem attack evasion/confirmation must next consume the
 selected profile; remaining conditional/more accuracy, off-hand sources, complete always-hit/DPS publication
 and native validation remain open. This work does not certify those entire rows.
@@ -276,7 +276,7 @@ under the ignored review artifacts. The preceding source/support correction is l
 Decision: move rolls into the existing action/target admission lock rather than consuming state before discovering
 cancellation. Preserve blocked/evaded rejection values rather than accepting a zero-damage hit with callbacks.
 The module decisions and alternatives are recorded in [skills](../protocol/11-skills.md) and
-[damage §2g](../protocol/20-damage.md#2g-ordinary-attack-evasion-and-critical-confirmation).
+[damage §2h](../protocol/20-damage.md#2h-ordinary-attack-evasion-and-critical-confirmation).
 Gem projectile continuation, per-use critical-roll correlation, other conditional/more accuracy, off-hand
 execution and full chance/always-hit/DPS publication remain open. No live session was launched; native validation
 waits for shared resources. This correction does not establish completion of all 357 virtual stats.
@@ -308,7 +308,7 @@ build has zero warnings/errors; Core 561, Data 18 and Gateway 4,283 pass without
 Decision: preserve gem inputs sampled at contact and ordinary bow inputs frozen at release; uniformly freezing
 gem inputs would change source lifecycles without snapshot evidence. Keep explicit miss continuation instead
 of accepting zero-damage collisions, which would stop flight and trigger impacts. These choices and alternatives
-are in [skills §10](../protocol/11-skills.md) and [damage §2g](../protocol/20-damage.md).
+are in [skills §10](../protocol/11-skills.md) and [damage §2h](../protocol/20-damage.md).
 Remaining work includes per-use critical-roll correlation, conditional/more accuracy, off-hand execution,
 complete chance/always-hit/DPS publication and native validation. Flight also retains pre-existing incomplete
 rules for pierce-budget terminal positioning, return-from-target exclusion, return terrain/endpoint sampling,
