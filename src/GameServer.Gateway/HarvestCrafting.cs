@@ -50,7 +50,7 @@ sealed class HarvestCrafting(ItemCatalog catalog, ItemRolls rolls, string folder
             Operation.Convert => Convert(item, recipe.Convert, rng),
             _ => null,
         };
-        return result is null ? null : new(result with { Identified = true }, recipe.Costs);
+        return result is null ? null : new(ItemRolls.ClearForesee(result with { Identified = true }), recipe.Costs);
     }
 
     Item? Augment(Item item, string tag, Random rng)

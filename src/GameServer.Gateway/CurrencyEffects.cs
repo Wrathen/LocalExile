@@ -121,6 +121,9 @@ static class CurrencyEffects
 
     public const string FracturingOrb = "Metadata/Items/Currency/CurrencyFractureRare";
 
+    /// <summary>Hinekora's Lock: puts an item into the foreseeing state (ItemRolls.ApplyLock).</summary>
+    public const string HinekorasLock = "Metadata/Items/Currency/CurrencyHinekorasLock";
+
     /// <summary>Fracturing Orb (as the official one): a rare item with at least four explicit mods, not corrupted,
     /// mirrored or fractured yet, on a base and class the game allows to fracture, has one random explicit mod
     /// fractured: it moves to the front of the explicits and from then on no currency removes or changes it (Scouring,

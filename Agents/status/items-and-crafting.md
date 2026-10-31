@@ -379,6 +379,17 @@ Part of [Status](../Status.md); what to build next in this area is in
   on the cursor, while a unique Mageblood, a Diamond Flask, a Crimson Jewel and a Scroll of Wisdom on the copy were
   refused without spending. See [13](../docs/protocol/13-items.md), "Mirror of Kalandra", and
   [the game rules](../docs/re/fracturing-mirror-mechanics.md).
+- **Hinekora's Lock (server rules verified live, 2026-10-31):** applying the Lock through C→S 0x71 to a rare item
+  sets the Mods flag bit 8 (0x0100) and a non-zero seed; the client shows the purple glow and the Lock tooltip text. When a currency is
+  used on the item the client sends C→S 0x29c (u16 key, currency/target ids) and S→C 0x29f answers with the preview
+  item (keyA = request key, status 0 = preview, 0x04FA = failure); the next 0x71 commits exactly that preview,
+  consumes the currency and clears the state. Normal, magic, gem, corrupted, mirrored, unmodifiable and
+  already-foreseeing targets are refused without spending; bench/Harvest/essence and every successful currency clear
+  the state. The client's
+  preview branch is the item popup's foresight element (`HinekoraForesightPopupIcon`, `HinekorasLockFutureSight`);
+  status 0 shows it and any non-zero status plays `HinekorasLockFail`. The committed result matches the preview byte
+  for byte. See [13](../docs/protocol/13-items.md), "Hinekora's Lock", and
+  [the evidence](../docs/re/hinekora-lock.md).
 - **Orb of Fusing: verified live (2026-10-21).** Captured 0x71/0x72 packets feed the same handler.
   Only links change; sockets, colours, gems and item properties stay intact.
   Refuses fewer than two sockets and protects fully linked 5/6-socket items; 2-4 sockets remain rerollable.
@@ -396,5 +407,5 @@ Part of [Status](../Status.md); what to build next in this area is in
   currency other than Scroll of Wisdom, Chromatic Orb, Jeweller's Orb, Orb of Fusing, Orb of Alchemy, Chaos Orb,
   Divine Orb, Orb of Scouring, Orb of Transmutation, Orb of Alteration, Orb of Augmentation, Regal Orb, Exalted Orb,
   Orb of Annulment, Armourer's Scrap, Blacksmith's Whetstone, Orb of Chance, Vaal Orb, the four Eldritch Ichors and
-  Embers, Glassblower's Bauble, Fracturing Orb, Mirror of Kalandra, Gemcutter's Prism, Sacred Orb and Orb of Regret;
-  support gems and links ([13](../docs/protocol/13-items.md) "Open").
+  Embers, Glassblower's Bauble, Fracturing Orb, Mirror of Kalandra, Hinekora's Lock, Gemcutter's Prism, Sacred Orb
+  and Orb of Regret; support gems and links ([13](../docs/protocol/13-items.md) "Open").

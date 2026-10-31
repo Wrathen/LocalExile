@@ -821,6 +821,45 @@ modelled. Using a Mirror from a stash tab is a local limitation, not a game rule
 it): the client's crafting check refuses an item with it (`0x141d68f9b`); the tooltip shows
 "Mirrored". See [the game rules](../re/fracturing-mirror-mechanics.md).
 
+### Hinekora's Lock (2026-10-31, server rules verified live)
+
+`CurrencyHinekorasLock`. Applying the Lock through the normal 0x71 currency path to a **rare** item sets its
+foreseeing state: the Mods component's u16 flags **bit 8 (`0x0100`)** and a non-zero `Item.ForeseeSeed`. The client
+reads the flag at item `+0x2c0` and shows the purple glow and the Lock tooltip text
+(`ItemPopupHinekorasLockFunctionText`, ClientStrings 6976). A second Lock is refused
+(`ItemErrorAlreadyHasHinekorasLock`, 6984); normal, magic, gem, corrupted, mirrored, unmodifiable and
+already-foreseeing items are refused before spending. `Item.Foreseeing`/`ForeseeSeed` are saved with the item.
+
+When a currency is used on a foreseeing item the client sends an **unframed C→S 0x029c** (20 bytes):
+
+```
+u16 0x029c, u16 key (BE, the client's +0xe1fa counter), u32 currency inventory, u32 currency item,
+u32 target inventory, u32 target item (all BE)
+```
+
+Captured: `029C 0001 00000001 0000054D 00000001 0000054F` = key 1, Orb of Alchemy 1357 on wand 1359. Sender
+`0x14216d5f0`, reader `0x141f9e8a0`; it only sends when both inventories are the player inventory (`client+0xc9d0`).
+The client sends 0x71 immediately after the 0x29c on the same use: 0x29c asks for the preview, 0x71 is the commit.
+
+The answer is **S→C 0x029f CurrencyApplicationForesightResult**: `u16 0x029f`, `u16 BE keyA` (the 0x29c key),
+`u16 raw status` (0: preview, non-zero: failure; 0x04FA is the client's own fail code), `u64 raw count`, then
+`count × item` (u16 BE length + `Item.Payload`). Handler `0x1421544c1`, reader `0x141fa1c50`, writer
+`0x141fa1b50`. The handler builds `{keyA, status, vector<Item>}` and dispatches it to the item popup's listener
+`0x1402d0120`; the client logs `CurrencyApplicationForesightResult recieved` (`0x1435d96a0`). The key must match
+the request: a response with the target id in keyA is logged but not matched. Status 0 shows the preview and loads
+`HinekorasLockFutureSight`/`HinekorasLockLoop`; any non-zero status plays `HinekorasLockFail`.
+
+The 0x71 commit uses the preview stored for the matching key/currency/target/seed (or recomputes the same
+`seed ^ currencyTypeHash` result), clears the flag and seed, consumes the currency and sends the normal 0xbf. The
+preview item and the committed item are byte-for-byte the same payload. Bench, Harvest, essence and every successful
+currency clear the state; a refused modification keeps it.
+
+The client's preview popup is the item popup's foresight element (`HinekoraForesightPopupIcon`,
+`HinekorasLockFutureSight`). The item popup's controller sends 0x29c when a currency is used in use mode on a
+foreseeing item; 0x29f status 0 shows the preview, any non-zero status plays `HinekorasLockFail`. The server-side
+preview/commit identity and all refusal/persistence rules are covered by the Gateway tests. See
+[the evidence](../re/hinekora-lock.md).
+
 ### Vaal Orb and corruption (2026-10-21, verified live)
 
 **Corrupted** is bit 0 of the Base component's u8 `+0xc7` (the second u8 after the visual identity): the client's

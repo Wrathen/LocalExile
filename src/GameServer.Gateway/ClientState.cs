@@ -362,6 +362,9 @@ sealed partial class ClientState(AreaLayout layout, uint ticket, uint seed)
     public float PortalRotationRadians => PortalRotationDegrees * MathF.PI / 180f;
     public long Ticks;
     public volatile PendingTransfer? PendingTransfer;
+    /// <summary>The 0x29c preview request (Hinekora's Lock): its key, the currency/target it names and the computed
+    /// preview answered by 0x29f. The next 0x71 on that target commits exactly this item.</summary>
+    public (ushort Key, uint InventoryId, uint CurrencyId, uint TargetInventoryId, uint TargetId, uint Seed, Item? Preview)? ForesightRequest;
     public ChooserList? Chooser;
     public ChatCommands? Commands;
     // 0x1c's u32 is an HNC carrier and must decrypt to idle zero bytes, or the client throws "HNC Protocol Violated".

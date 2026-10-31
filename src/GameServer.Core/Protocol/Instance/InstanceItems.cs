@@ -78,6 +78,14 @@ public sealed record Item(uint TypeHash, IReadOnlyList<string> Components, ushor
     /// Mods component's flag bit 1 (+0x2df, a plain bool: the client refuses crafting on it, 0x141d68f9b).</summary>
     public bool Mirrored { get; init; }
 
+    /// <summary>Hinekora's Lock: the item is in the foreseeing state. Sent as the Mods component's flag bit 8
+    /// (0x0100); the client reads it at item +0x2c0 and shows the purple glow and the Lock tooltip text.</summary>
+    public bool Foreseeing { get; init; }
+
+    /// <summary>The seed the preview and the committed result are both computed from. 0 when not foreseeing; kept in
+    /// the save so the preview survives a reload and the committed result is identical to it.</summary>
+    public uint ForeseeSeed { get; init; }
+
     /// <summary>The indexes in <see cref="Mods"/> of the fractured explicit mods.</summary>
     public IReadOnlySet<int> FracturedIndexes() => Mods.Select((m, i) => (m, i)).Where(p => p.m.Section == ModSection.Explicit)
         .Take(FracturedCount).Select(p => p.i).ToHashSet();
@@ -154,7 +162,8 @@ public sealed record Item(uint TypeHash, IReadOnlyList<string> Components, ushor
                 // 0x1421df6e0: u8 +0x2b8 (item level), u8 +0x2bc (level requirement, kept as sent), u16 flags (bit 6
                 // incubator, bit 4 → u8, bit 15 a 0x1c8 record), the base magic properties 0x142201d70 (MagicProperties), u8, u8.
                 case "Mods":
-                    w.U8(ItemLevel).U8((byte)Math.Clamp(RequiredLevel ?? LevelRequirementOf?.Invoke(this) ?? 0, 0, 255)).U16((ushort)(Mirrored ? 0x2 : 0));
+                    w.U8(ItemLevel).U8((byte)Math.Clamp(RequiredLevel ?? LevelRequirementOf?.Invoke(this) ?? 0, 0, 255))
+                        .U16((ushort)((Mirrored ? 0x2 : 0) | (Foreseeing ? 0x100 : 0)));
                     MagicProperties(w); w.U8(0).U8(0);
                     break;
                 case "Quality": w.U8(Quality); break;                 // 0x1424aec50
@@ -343,6 +352,26 @@ public static class InstanceItems
     // C→S 0x29 (class 0x14316c930, id only, sender 0x140117b80): drop the held item into the world. Outside town the
     // client sends it at once; in town (and for quest items) it shows the Keep / Destroy popup instead and sends nothing
     // unless Destroy is chosen (0x16, DestroyCursorItemCommand).
+
+    public const ushort CurrencyApplicationForesightResultId = 0x29f;
+
+    /// <summary>The 0x29f result code that plays the client's Hinekora fail animation (0 shows the preview).</summary>
+    public const ushort CurrencyApplicationForesightFailure = 0x04FA;
+
+    /// <summary>
+    /// S→C 0x29f CurrencyApplicationForesightResult (dispatcher case 223, handler 0x1421544c1, reader 0x141fa1c50):
+    /// u16 id, u16 BE keyA (the C→S 0x29c request key), u16 raw status (0: preview, non-zero: failure; the client's
+    /// own fail path uses <see cref="CurrencyApplicationForesightFailure"/>), u64 raw count, then count × item
+    /// (u16 BE length + <see cref="Item.Payload"/>). The handler builds {keyA, status, vector&lt;Item&gt;} and dispatches
+    /// it to the instance-client event bus at +0x48f0, where the open item popup shows the preview.
+    /// </summary>
+    public static byte[] CurrencyApplicationForesightResult(ushort keyA, ushort status, IReadOnlyList<Item> items)
+    {
+        var w = new LoginWriter().U16(CurrencyApplicationForesightResultId).U16(keyA)
+            .Bytes([(byte)status, (byte)(status >> 8)]).RawU64((ulong)items.Count);
+        foreach (var item in items) w.Bytes(item.Wire());
+        return w.ToArray();
+    }
 
     /// <summary>
     /// S→C 0xbf (dispatcher case 0x34, class 0x1435dbd28, write 0x1421a37f0 → 0x1425079a0; handler 0x141d62550 →

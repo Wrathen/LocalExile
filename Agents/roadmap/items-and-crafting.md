@@ -71,6 +71,9 @@ features.
   success and refusal paths. Influence/synthesis/veiled modifiers and Reflective Oil/Split/Sanctified remain separate,
   and Mirror from a stash tab is still unsupported. See
   [the game rules](../docs/re/fracturing-mirror-mechanics.md).
+  Hinekora's Lock's server rules are in (Mods flag bit 8 + seed, C→S 0x29c / S→C 0x29f preview with status 0,
+  exact committed result, clear-on-modification); the client's preview branch is the item popup's foresight element.
+  See [the evidence](../docs/re/hinekora-lock.md).
 - **Socket colours (3.29):** the 3.29 rules are in (white by default with an item-level colour chance, the
   Chromatic and non-white bench crafts, white sockets from Jeweller's/bench socket adds, Vaal colouring one white
   socket; [13](../docs/protocol/13-items.md), "Socket colours (3.29)", Status).

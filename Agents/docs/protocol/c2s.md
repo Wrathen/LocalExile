@@ -359,7 +359,7 @@ no branch, no call that takes the stream). `≥ N` = N fixed bytes plus variable
 | 0x0297 | `0x14345ef10` / `0x140e29080` | 3 | generic (9 S→C ids) | `0x140c2a1c0` |  |
 | 0x0298 | `0x1435bfa68` / `0x141f9d9b0` | 18 |  | `0x1403e1f00` |  |
 | 0x029a | `0x1435c0670` / `0x141f926a0` | 10 | instance 0x29b | `0x1403d77e0` |  |
-| 0x029c | `0x1435c04e0` / `0x141f9e8a0` | 20 |  | `0x14216d5f0` |  |
+| 0x029c | `0x1435c04e0` / `0x141f9e8a0` | 20 | S→C 0x29f (Hinekora preview) | `0x14216d5f0` |  |
 | 0x029d | `0x1435bfd58` / `0x141f9eae0` | 28 |  | `0x1402cfe60` |  |
 | 0x029e | `0x1435bfa28` / `0x141f9edb0` | 25 |  | `0x1402cfe60` |  |
 | 0x02a0 | `0x14316c420` / `0x140912ff0` | 6 | generic (19 S→C ids) | `0x14011b530`, `0x14011b9c0` |  |

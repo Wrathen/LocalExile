@@ -50,8 +50,8 @@ sealed class EssenceCrafting(ItemCatalog catalog, ItemRolls rolls, string folder
             s.Id is "item_generation_cannot_change_prefixes" or "item_generation_cannot_change_suffixes" or
                 "item_generation_cannot_roll_attack_affixes" or "item_generation_cannot_roll_caster_affixes") == true)) return null;
 
-        return rolls.Roll(item, ItemRarity.Rare, random, guaranteed: forced,
-            maxModLevel: essence.ModLevelCap > 0 ? essence.ModLevelCap : null) with { Identified = true };
+        return ItemRolls.ClearForesee(rolls.Roll(item, ItemRarity.Rare, random, guaranteed: forced,
+            maxModLevel: essence.ModLevelCap > 0 ? essence.ModLevelCap : null) with { Identified = true });
     }
 
     static IReadOnlyList<Essence> Load(ItemCatalog catalog, string folder)

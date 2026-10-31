@@ -131,7 +131,7 @@ sealed class BenchCrafting(ItemCatalog catalog, ItemRolls rolls, string folder =
             result = RerollAffixes(item, type, count, rng);
         }
         if (result is null) return null;
-        return new(result, costs.GroupBy(c => c.Currency).Select(g => (g.Key, g.Sum(c => c.Amount))).ToList());
+        return new(ItemRolls.ClearForesee(result), costs.GroupBy(c => c.Currency).Select(g => (g.Key, g.Sum(c => c.Amount))).ToList());
     }
 
     Item? RerollAffixes(Item item, ItemCatalog.BaseType type, int count, Random rng)
