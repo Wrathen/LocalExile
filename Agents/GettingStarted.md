@@ -9,8 +9,9 @@ what success looks like and what to do when it fails. It is written to be follow
    `--patching-server 127.0.0.1:12995`. Started any other way (double-click, Steam, launcher, a second instance), the
    client contacts the official patch servers. It may then update itself, which overwrites the patched executable and
    the game data.
-2. **Run only one client at a time.** To bring a running client to the front, restore its window; do not launch it
-   again.
+2. **Run only the clients `live.ps1` starts: one, or more as named sessions.** To bring a running client to the
+   front, restore its window; do not launch it again. Several clients (or several checkouts' servers) at once need
+   `live.ps1 -Session` and `-PortBase` ([live testing](docs/dev/live-testing.md#several-stacks-and-clients)).
 3. **Run every command from the repository root.** The tools read and write `data/` and `Client/` relative to the
    current directory.
 4. **Never commit `data/` or `Client/`.** They hold your keys, accounts and the game. Both are git-ignored; keep it
@@ -369,13 +370,15 @@ connection's last packets in `logs\packets\`. `Game_TRACE` adds dev traces, and 
 all for an issue ([debugging](docs/dev/debugging.md)).
 
 `live.ps1` options:
-- `-Stop` stops the client, the walk-map recorder and the servers, a watched Gateway included, then waits until their
-  ports are free (with `-Only Gateway` only that server, with `-NoClient` everything but the client).
+- `-Stop` stops this checkout's clients, walk-map recorder and servers, a watched Gateway included, then waits until
+  their ports are free (with `-Only Gateway` only that server, with `-NoClient` everything but the clients, with
+  `-ClientOnly -Session S` only that session's client). Another checkout's processes are never stopped
+  ([live testing](docs/dev/live-testing.md), "Several stacks and clients").
 - `-NoClient` restarts the servers but keeps the running client.
 - `-ClientOnly` starts only the client, against servers that already run: nothing is built, extracted or restarted, and
-  a running client stays. With `-Walkmaps` it also starts the walk-map recorder unless one runs (the recorder ends with
-  its client, so each new client needs one); the Gateway announces area loads to it only if it was started with
-  `-Walkmaps` too.
+  a running client stays. With `-Walkmaps` (default ports and client) it also starts this checkout's walk-map recorder
+  unless it runs (the recorder ends with its client, so each new client needs one); the Gateway announces area loads
+  to it only if it was started with `-Walkmaps` too.
 - `-Only Gateway` (or `Auth`, `Patch`, comma-separated) rebuilds and restarts only those servers; the client and the
   other servers keep running. After a Gateway change hot reload cannot apply this is all you need: the client drops to
   the login screen, log in and Play again.
@@ -431,8 +434,10 @@ Environment variables, read when each server starts:
 | `Game_BIND` | `127.0.0.1` | address Auth and Gateway listen on |
 | `Game_LOGIN_PORT` | 20493 | login server port (must match step 6) |
 | `Game_GATEWAY_PORT` | 6112 | instance server port |
-| `Game_GATEWAY_HOST` | 127.0.0.1 | address sent to the client for area changes |
+| `Game_GATEWAY_HOST` | 127.0.0.1 | address (IP) Auth and the Gateway send the client for its first area and every area change |
 | `Game_AUTH_CONTROL_PORT` | 20495 | Auth ↔ Gateway control port (localhost only) |
+| `Game_PORT_BASE` | unset | `live.ps1`: this checkout's servers on ports base..base+4 (Patch, Patch web, Auth login, Auth control, Gateway); remembered in `data/stack.json` like `-PortBase` ([live testing](docs/dev/live-testing.md#several-stacks-and-clients)) |
+| `Game_CLIENT_SESSION` | unset | `live.ps1 -ClientOnly` and `client_control.py`: the named client session, like `-Session` / `--session` |
 | `Game_CLIENT_EXE` | `Client/Game.exe` | client executable the Gateway reads protocol constants from |
 | `Game_RANDOM_SEEDS` | unset | new instances of the areas the Gateway generates itself (`gate-baseline.json`, [re/011](docs/re/011-level-generation.md)) get random seeds, every other area seed 1; `0` = seed 1 everywhere |
 | `Game_WALKMAPS` | unset | set by `live.ps1 -Walkmaps`: the Gateway announces each area load to the walk-map recorder and runs capture tours (`/tour`); unset, it records nothing |

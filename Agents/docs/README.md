@@ -59,6 +59,7 @@ How to regenerate them: [re/tooling.md](re/tooling.md) §7.
 | [dev/debugging.md](dev/debugging.md) | log timestamps and archives, error stack traces, the packet history and dumps, `Game_TRACE`, client crashes, `bugreport.ps1` |
 | [dev/editable-game-data.md](dev/editable-game-data.md) | what game data can become editable in SQLite, the client-compatibility boundary, the snapshot/cache design and the phased plan |
 | [dev/modding.md](dev/modding.md) | mods in `Mods/Binaries/<id>/`: `mod.json`, writing one in `Mods/Source/`, the hooks, reloading, limits |
+| [dev/headless-client.md](dev/headless-client.md) | cheap clients for agent sessions: the engine's Null renderer, per-client settings, frame cap, process limits, `nullifier.py`, measurements |
 | [dev/live-testing.md](dev/live-testing.md) | the older live-testing notes (GettingStarted supersedes them) |
 | [dev/ranged-monster-actions-port.md](dev/ranged-monster-actions-port.md) | standalone bow/wand and monster-action port, preserved upstream behavior and validation limits |
 | [dev/passive-graph-data.md](dev/passive-graph-data.md) | pinned PSG format and read-only analysis exports; no client installation or gameplay integration |

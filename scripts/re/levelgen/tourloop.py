@@ -15,7 +15,8 @@ FAILURES = ROOT / "data" / "walkability" / "tour-failures.txt"
 LOG = ROOT / "logs" / "tourloop.log"
 RUNS = ROOT / "logs" / "tour-runs"
 RECORDS = ROOT / "data" / "tour-records" / "stops.jsonl"
-CLIENT_LOG = ROOT / "Client" / "logs" / "Client.txt"
+STACK = ROOT / "data" / "stack.json"  # live.ps1 -PortBase: this checkout's ports
+CLIENT_RECORD = ROOT / "data" / "clients" / "default.json"  # live.ps1: the default client's PID and working folder
 GATEWAY_LOG = ROOT / "logs" / "live-gateway.log"
 PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
 CONTROL = ROOT / "scripts" / "dev" / "client_control.py"
@@ -48,23 +49,43 @@ def control(*args, stdin=None, timeout=120):
 
 
 def client_running():
-    return "Game.patched" in ps("Get-Process -Name 'Game.patched' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName").stdout
+    """This checkout's client (started from its Client folder), not another checkout's."""
+    client = ROOT / "Client" / "Game.patched.exe"
+    return ps(f"@(Get-CimInstance Win32_Process -Filter \"Name = 'Game.patched.exe'\" | Where-Object {{ $_.ExecutablePath -eq '{client}' }}).Count"
+              ).stdout.strip() not in ("", "0")
 
 
 def recorder_running():
-    r = ps("Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | Where-Object { $_.CommandLine -like '*walkmaps.py*' } | "
+    walkmaps = ROOT / "scripts" / "walkmaps" / "walkmaps.py"  # this checkout's recorder (live.ps1 starts it by full path)
+    r = ps(f"Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | Where-Object {{ $_.CommandLine -like '*{walkmaps}*' }} | "
            "Select-Object -ExpandProperty ProcessId")
     return r.stdout.strip() != ""
 
 
+def gateway_port():
+    try:
+        return int(json.loads(STACK.read_text(encoding="utf-8-sig"))["ports"]["gateway"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return 6112
+
+
+def client_log():
+    """The Client.txt of this checkout's default client: in the working folder live.ps1 recorded (Client by default)."""
+    try:
+        folder = Path(json.loads(CLIENT_RECORD.read_text(encoding="utf-8-sig"))["folder"])
+    except (OSError, ValueError, KeyError, TypeError):
+        folder = ROOT / "Client"
+    return folder / "logs" / "Client.txt"
+
+
 def gateway_listening():
-    return ps("@(Get-NetTCPConnection -LocalPort 6112 -State Listen -ErrorAction SilentlyContinue).Count").stdout.strip() not in ("", "0")
+    return ps(f"@(Get-NetTCPConnection -LocalPort {gateway_port()} -State Listen -ErrorAction SilentlyContinue).Count"
+              ).stdout.strip() not in ("", "0")
 
 
 def stop_all():
-    ps("Get-Process -Name 'Game.patched' -ErrorAction SilentlyContinue | Stop-Process -Force; "
-       "foreach ($c in Get-NetTCPConnection -LocalPort 6112 -State Listen -ErrorAction SilentlyContinue) { "
-       "$p = Get-Process -Id $c.OwningProcess -ErrorAction SilentlyContinue; if ($p.ProcessName -eq 'dotnet') { Stop-Process -Id $p.Id -Force } }")
+    """This checkout's client, recorder and servers (live.ps1 -Stop), never another checkout's."""
+    ps(f"& '{ROOT / 'scripts' / 'dev' / 'live.ps1'}' -Stop")
     time.sleep(2)
 
 
@@ -118,7 +139,7 @@ def record_drop(current, reason):
     area, _, seed = current.partition(" ")
     lines = []
     try:
-        with CLIENT_LOG.open(encoding="utf-8", errors="replace") as f:
+        with client_log().open(encoding="utf-8", errors="replace") as f:
             text = f.read().splitlines()
         at = max((i for i, l in enumerate(text) if f'area "{area}" with seed {seed}' in l), default=None)
         lines = text[at:at + 400] if at is not None else text[-80:]

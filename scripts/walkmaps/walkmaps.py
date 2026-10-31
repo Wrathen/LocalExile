@@ -1,7 +1,7 @@
 """Walk-map generator: captures the terrain walkability grid of every area your own client generates.
 
 Usage (started for you by `scripts/dev/live.ps1 -Walkmaps`):
-    python scripts/walkmaps/walkmaps.py [--process Game.patched.exe] [--out data/walkability]
+    python scripts/walkmaps/walkmaps.py [--process Game.patched.exe | --record data/clients/default.json] [--out data/walkability]
 
 Needs: pip install frida  (Python 3.9+). Attaches to the running client, waits for it if it is not running yet,
 and writes data/walkability/<area>_seed<seed>.bin plus <area>_seed<seed>.json ({"w":..,"h":..}), and <area>_seed<seed>.projectile.bin (what stops projectiles), and the layout's area
@@ -21,6 +21,8 @@ import os
 import sys
 import threading
 import time
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dev"))
 
 try:
     import frida
@@ -49,12 +51,14 @@ def replace(tmp, path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--process", default="Game.patched.exe", help="client process name")
+    ap.add_argument("--record", help="attach to the client whose PID live.ps1 records in this file (several clients "
+                                     "may run on one PC), instead of the one process of that name")
     ap.add_argument("--out", default=os.path.join(REPO, "data", "walkability"), help="output folder")
     ap.add_argument("--wait", type=int, default=600, help="seconds to wait for the client to start")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    session = attach(args.process, args.wait)
+    session = attach(args.process, args.wait, args.record)
     with open(os.path.join(HERE, "walkmaps.js"), encoding="utf-8") as f:
         script = session.create_script(f.read())
 
@@ -62,7 +66,7 @@ def main():
     script.on("message", lambda message, data: on_message(message, data, args.out))
     session.on("detached", lambda reason, *_: (log(f"client gone ({reason})"), done.set()))
     script.load()
-    log(f"attached to {args.process}; writing to {args.out}")
+    log(f"attached to {args.record or args.process}; writing to {args.out}")
     try:
         while not done.wait(1):
             pass
@@ -70,12 +74,38 @@ def main():
         pass
 
 
-def attach(name, wait):
+def recorded_pid(record, info=None):
+    """The client PID in a live.ps1 record (data/clients/<session>.json), or None while there is none (pid 0 while
+    live.ps1 is starting the client) or the record is stale: the process with that PID must be the recorded one, by
+    its start time (a PID is reused once its process exits) and the path it was started by (this checkout's Client),
+    as client_control.find_client checks it."""
+    try:
+        with open(record, encoding="utf-8-sig") as f:
+            saved = json.load(f)
+        pid, started = int(saved.get("pid") or 0), int(saved.get("started") or 0)
+    except (OSError, ValueError, AttributeError, TypeError):
+        return None
+    if not pid:
+        return None
+    import client_control  # scripts/dev, on sys.path (below)
+    details = (info or client_control.process_info)(pid)
+    if (details is None or abs(details[1] - started) >= 20_000_000
+            or not client_control.same_path(details[0], client_control.CLIENT)):
+        return None
+    return pid
+
+
+def attach(name, wait, record=None):
     deadline = time.time() + wait
     announced = False
+    if record:
+        name = f"the client recorded in {record}"
     while True:
         try:
-            return frida.attach(name)
+            pid = recorded_pid(record) if record else None
+            if record and pid is None:
+                raise frida.ProcessNotFoundError(f"no client recorded in {record} yet")
+            return frida.attach(pid if record else name)
         except frida.ProcessNotFoundError:
             if time.time() > deadline:
                 sys.exit(f"walkmaps: {name} did not start within {wait} s")

@@ -69,6 +69,21 @@ Part of [Status](../Status.md); what to build next in this area is in
   Code: `PassiveSkillGraph.cs`, `AdditionalAscendancyGraph.cs`, `GameFileSystem.cs`, `scripts/re/passive-graphs`.
   Docs: [passive graph data guide](../docs/dev/passive-graph-data.md).
 
+- Several stacks and clients on one PC: `live.ps1 -PortBase N` runs a checkout's servers on their own five ports
+  (remembered in `data\stack.json`; Auth now sends the client to that Gateway), `-Session NAME` starts more clients of a
+  stack, each in its own folder with its own settings file, saved login, `Client.txt` and PID record, and `-Stop` stops
+  the checkout's own servers and clients. Whatever `live.ps1` stops is the checkout's own; a stack off the default ports
+  never writes the shared GGPK gateway list. The bridge (`--session`) attaches to its session's client and filters the
+  Gateway's chat replies by that client's connection.
+  Verified: a stack on 21000-21004 started, restarted and stopped next to another checkout's live stack and client on the
+  default ports, which kept running; a session client started in its own folder on that stack (its own `Client.txt`,
+  the linked GGPK, the shared sound banks and Streamline through junctions). Tests: `scripts/dev/test_live_client_only.ps1`
+  (ports, sessions, PID records, process ownership, the real gateway-list read while the GGPK is held),
+  `test_client_control.py` (a real process started through a real junction), `GgpkMaintenanceTests`. Not yet seen live:
+  the session's settings file in use and a bridge login on a session (the memory guard stopped the client while loading).
+  Code: `scripts/dev/live.ps1`, `scripts/dev/client_control.py`, `GatewayEndpoint.cs`.
+  Docs: [live testing](../docs/dev/live-testing.md#several-stacks-and-clients).
+
 - Debugging aids: timestamped server logs, whole exceptions with stack traces (a failing packet handler names its
   messages), the reason on every `DISCONNECT` line, archived logs of the last 10 full runs, each connection's last 256
   packets (printed after an error or an unexplained disconnect, dumped to `logs\packets`, `/lastpackets`), `Game_TRACE`
@@ -78,6 +93,21 @@ Part of [Status](../Status.md); what to build next in this area is in
   still to do, and so is checking that `trace-crash.js` reads the client's receive pump right.
   Code: `ServerLog.cs`, `PacketHistory.cs`, `Program.Connection.cs`, `scripts/dev/live.ps1`.
   Docs: [debugging](../docs/dev/debugging.md).
+
+- Cheap session clients: `live.ps1 -Session S` starts every session client through `scripts/dev/nullifier.py`, which
+  spawns it in its session folder inside a kill-on-close job, with a Frida agent that gives its two-copies mutexes
+  session-local names (so it never takes one of the two Global\PoERunMutexA/B slots the user's client needs), keeps
+  its window from taking focus, and sets below-normal priority and EcoQoS; `-Nullifier` adds the engine's own Null
+  renderer (no GPU device; the agent fixes the Null index buffer's missing format, which crashed area entry) and
+  working-set trimming. New sessions default to the cheap DirectX 11 preset. Live 2026-10-31 (with the earlier
+  stand-alone launcher): login, play, 60 s in town, slash commands, chat, `/tp`, waypoint travel and `/goto` worked
+  with both renderers; DirectX 11 preset 4.3 GB commit, 1.7 GB VRAM, ~11 % of a core; Null 1.9 GB, no GPU memory,
+  ~15 % (a normal client: 7.5 GB, 3.4 GB VRAM, 37 %). The live.ps1 integration was verified live on 2026-10-31
+  (start, record, bridge, waypoint travel, `/goto`, stop, a killed launcher, two sessions at once with the Global
+  slots free, minimized clients, no focus taken); only Lioneye's Watch and The Coast were entered with the Null renderer.
+  Offline tests: `test_nullifier.py`, `test-nullifier-mutex.cjs`, `test_client_control.py`, `test_live_client_only.ps1`.
+  Code: `scripts/dev/nullifier.js`, `nullifier.py`, `nullifier-measure.ps1`, `nullifier-bench.py`.
+  Docs: [headless client](../docs/dev/headless-client.md).
 
 ## Not working yet
 

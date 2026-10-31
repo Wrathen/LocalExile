@@ -467,8 +467,8 @@ partial class Program
         if (t.AtWaypoint) WaypointArrivals[r.Ticket] = 0;
         else if (t.ArriveAt is { } spot) SpotArrivals[r.Ticket] = spot;
         else if (!t.AtSpawn) AreaLayouts.CameFrom[r.Ticket] = conn.Layout.Hash;
-        string host = Environment.GetEnvironmentVariable("Game_GATEWAY_HOST") ?? "127.0.0.1";
-        ushort port = ushort.TryParse(Environment.GetEnvironmentVariable("Game_GATEWAY_PORT"), out var gp) ? gp : (ushort)6112;
+        string host = GatewayEndpoint.Host;
+        ushort port = GatewayEndpoint.Port;
         await Send(remote, stream, ciphers, InstanceTransfer.ConnectInstance(host, port, r.Ticket, r.Area, conn.Keyring.Key(r.Ticket)),
             $"0x0027 connect to instance {r.Instance} of area 0x{r.Area:x4} (seed {r.Seed}) at {host}:{port}, ticket 0x{r.Ticket:x8}");
     }

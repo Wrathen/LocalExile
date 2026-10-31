@@ -2,6 +2,7 @@
 
     .venv/Scripts/python.exe scripts/dev/client_control.py game:status
     .venv/Scripts/python.exe scripts/dev/client_control.py game:open
+    .venv/Scripts/python.exe scripts/dev/client_control.py --session a1 game:open
     .venv/Scripts/python.exe scripts/dev/client_control.py login:offline --password-stdin
     .venv/Scripts/python.exe scripts/dev/client_control.py login:saved
     .venv/Scripts/python.exe scripts/dev/client_control.py character:list
@@ -12,12 +13,18 @@
     .venv/Scripts/python.exe scripts/dev/client_control.py flask:use 1
     .venv/Scripts/python.exe scripts/dev/client_control.py passive:allocate 202
     .venv/Scripts/python.exe scripts/dev/client_control.py passive:refund 202
+    echo '{"command":"waypoint:travel","area":"0x7ad2"}' | .venv/Scripts/python.exe scripts/dev/client_control.py --stdio
+    .venv/Scripts/python.exe scripts/dev/client_control.py game:frames
     echo '{"command":"inventory:pickup","inventoryId":1,"id":1027}' | .venv/Scripts/python.exe scripts/dev/client_control.py --stdio
 
 Use --stdio for persistent JSON-lines RPC (one request/result per line). Each request is
 {"command":"character:play","name":"OfflineWitch"}; login takes account/password fields.
 The transport writes no credentials or tokens to disk. It attaches only to this checkout's
 copied Game.patched.exe; it never starts an official/Steam client or changes save files.
+
+--session NAME (or Game_CLIENT_SESSION) drives one of several clients of this checkout's stack: the one
+`live.ps1 -ClientOnly -Session NAME` started and recorded in data/clients/NAME.json. Without it, the client as before.
+Ports come from data/stack.json (live.ps1 -PortBase), else Game_LOGIN_PORT, else the defaults.
 """
 import argparse
 import ctypes
@@ -38,24 +45,168 @@ import frida
 ROOT = Path(__file__).resolve().parents[2]
 CLIENT = ROOT / "Client" / "Game.patched.exe"
 AGENT = Path(__file__).with_name("client-control.js")
+# live.ps1 writes both: the stack's ports when it runs on its own (-PortBase), and each client's PID record.
+STACK = ROOT / "data" / "stack.json"
+CLIENTS = ROOT / "data" / "clients"
+DEFAULT_SESSION = "default"
+DEFAULT_PORTS = {"patch": 12995, "patchWeb": 8080, "login": 20493, "control": 20495, "gateway": 6112}
+# The servers' own variables, which live.ps1 also honours on the default ports.
+PORT_VARIABLES = {"patch": "Game_PATCH_TCP_PORT", "login": "Game_LOGIN_PORT", "control": "Game_AUTH_CONTROL_PORT",
+                  "gateway": "Game_GATEWAY_PORT"}
+SESSION_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,23}")
 
 
-def live_process(pid):
-    """Frida's process inventory can retain a terminated process while another recorder holds its handle."""
+def session_name(value):
+    """'' and 'default' are the client as before; others are named sessions (live.ps1 -Session)."""
+    if not value or value == DEFAULT_SESSION:
+        return DEFAULT_SESSION
+    if not SESSION_NAME.fullmatch(value):
+        raise ValueError("session name: up to 24 letters, digits, - and _")
+    return value
+
+
+def stack_port(name, environ=os.environ, path=STACK):
+    """This checkout's port `name`. live.ps1 is the one source: a stack on its own ports (-PortBase, Game_PORT_BASE) is
+    written to data/stack.json with every port it gave its servers, which wins. On the default ports there is no file,
+    and the servers' own variable (Game_LOGIN_PORT, ...) or the default applies, as for live.ps1."""
+    try:
+        ports = json.loads(path.read_text(encoding="utf-8-sig")).get("ports") or {}
+        return int(ports[name])
+    except (OSError, ValueError, AttributeError, KeyError, TypeError):
+        pass
+    value = environ.get(PORT_VARIABLES.get(name, ""), "")
+    return int(value) if value else DEFAULT_PORTS[name]
+
+
+def read_records(folder=CLIENTS):
+    """live.ps1's client records by session: {"pid": …, "started": FILETIME (UTC)}. While it starts a client the
+    record has pid 0 and the time just before the start (a pending launch)."""
+    records = {}
+    for file in folder.glob("*.json") if folder.is_dir() else []:
+        try:
+            record = json.loads(file.read_text(encoding="utf-8-sig"))
+            records[file.stem] = {"pid": int(record["pid"]), "started": int(record["started"])}
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return records
+
+
+def filetime_now():
+    return int((time.time() + 11644473600) * 10_000_000)
+
+
+def same_path(a, b):
+    return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
+
+
+def launched_path(command_line):
+    """The executable as a command line names it (the first argument, quoted or not)."""
+    command_line = command_line.lstrip()
+    if command_line.startswith('"'):
+        return command_line[1:].split('"', 1)[0]
+    return command_line.split(None, 1)[0] if command_line else ""
+
+
+def process_info(pid):
+    """(executable path as launched, creation FILETIME) of a running process, else None. Frida's process inventory can
+    retain a terminated process while another recorder holds its handle. Each checkout reaches the shared client
+    through its own Client junction, and only the path the process was started by tells them apart: the image name
+    Windows reports (QueryFullProcessImageNameW) resolves the junction to the shared folder. That path comes from the
+    process's own command line (NtQueryInformationProcess, ProcessCommandLineInformation); live.ps1 starts every
+    client by its full path."""
     kernel=ctypes.WinDLL("kernel32",use_last_error=True)
     kernel.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD]
     kernel.OpenProcess.restype=wintypes.HANDLE
     kernel.GetExitCodeProcess.argtypes=[wintypes.HANDLE,ctypes.POINTER(wintypes.DWORD)]
     kernel.GetExitCodeProcess.restype=wintypes.BOOL
+    kernel.GetProcessTimes.argtypes=[wintypes.HANDLE]+[ctypes.POINTER(wintypes.FILETIME)]*4
+    kernel.GetProcessTimes.restype=wintypes.BOOL
     kernel.CloseHandle.argtypes=[wintypes.HANDLE]
     handle=kernel.OpenProcess(0x1000,False,pid)
     if not handle:
-        return False
+        return None
     try:
         code=wintypes.DWORD()
-        return bool(kernel.GetExitCodeProcess(handle,ctypes.byref(code))) and code.value==259
+        if not kernel.GetExitCodeProcess(handle,ctypes.byref(code)) or code.value!=259:
+            return None
+        times=[wintypes.FILETIME() for _ in range(4)]
+        if not kernel.GetProcessTimes(handle,*map(ctypes.byref,times)):
+            return None
+        ntdll=ctypes.WinDLL("ntdll")
+        ntdll.NtQueryInformationProcess.argtypes=[wintypes.HANDLE,ctypes.c_int,ctypes.c_void_p,wintypes.ULONG,
+                                                  ctypes.POINTER(wintypes.ULONG)]
+        size=wintypes.ULONG(0)
+        ntdll.NtQueryInformationProcess(handle,60,None,0,ctypes.byref(size))
+        if not size.value:
+            return None
+        buffer=ctypes.create_string_buffer(size.value)
+        if ntdll.NtQueryInformationProcess(handle,60,buffer,size,ctypes.byref(size))!=0:
+            return None
+        # UNICODE_STRING {u16 Length, u16 MaximumLength, pointer Buffer}; the text follows it in the same buffer.
+        length=struct.unpack_from("<H",buffer.raw)[0]
+        address=struct.unpack_from("<Q",buffer.raw,8)[0]
+        text=ctypes.wstring_at(address,length//2)
+        return launched_path(text), (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime
     finally:
         kernel.CloseHandle(handle)
+
+
+def find_client(session, pids, info=process_info, records=None, client=CLIENT, now=None):
+    """The PID of the session's client among `pids` (running Game.patched.exe processes), or None. A session's client
+    is the one its record names (PID and start time: a PID may be reused), started from this checkout's Client path.
+    Without a record, the default session's is the one client of this checkout no record names (one an older live.ps1
+    started), except one started while a launch is pending: that one is another session's, not yet recorded."""
+    records = read_records() if records is None else records
+    now = filetime_now() if now is None else now
+    infos = {pid: info(pid) for pid in pids}
+    def recorded(pid, record):
+        details = infos.get(pid)
+        return (record["pid"] == pid and details is not None and abs(details[1] - record["started"]) < 20_000_000  # 2 s
+                and same_path(details[0], client))
+    if session in records:
+        return next((pid for pid in infos if recorded(pid, records[session])), None)
+    if session != DEFAULT_SESSION:
+        return None
+    pending = [r["started"] for r in records.values() if r["pid"] == 0 and now - r["started"] < 600_000_000]  # 60 s
+    candidates = [pid for pid, details in infos.items()
+                  if details is not None and same_path(details[0], client)
+                  and not any(recorded(pid, r) for r in records.values())
+                  and not any(details[1] >= started for started in pending)]
+    if len(candidates) > 1:
+        raise RuntimeError("Several clients of this checkout run without a record; name one with --session")
+    return candidates[0] if candidates else None
+
+
+def connection_ports(pid, remote_port, table=None):
+    """The local ports of `pid`'s TCP connections to `remote_port` (the client's connections to its Gateway), or None
+    when the table cannot be read. MIB_TCPROW_OWNER_PID rows: state, local address, local port, remote address, remote
+    port, owner; ports in network order in the low 16 bits."""
+    if table is None:
+        table = tcp_table()
+        if table is None:
+            return None
+    count = struct.unpack_from("<I", table)[0]
+    ports = set()
+    for index in range(count):
+        state, _, local, _, remote, owner = struct.unpack_from("<6I", table, 4 + 24 * index)
+        swap = lambda value: ((value & 0xff) << 8) | ((value >> 8) & 0xff)
+        if owner == pid and swap(remote) == remote_port and state == 5:  # ESTABLISHED
+            ports.add(swap(local))
+    return ports
+
+
+def tcp_table():
+    """GetExtendedTcpTable(AF_INET, TCP_TABLE_OWNER_PID_ALL) as bytes, or None."""
+    iphlpapi = ctypes.WinDLL("iphlpapi")
+    size = wintypes.DWORD(0)
+    for _ in range(4):
+        buffer = ctypes.create_string_buffer(size.value or 1)
+        result = iphlpapi.GetExtendedTcpTable(buffer, ctypes.byref(size), False, 2, 5, 0)
+        if result == 0:
+            return buffer.raw
+        if result != 122:  # ERROR_INSUFFICIENT_BUFFER: try again with the size it asked for
+            return None
+    return None
 
 
 def normalize(request):
@@ -105,8 +256,20 @@ def flask_packet(request):
 
 
 GATEWAY_LOG = ROOT / "logs" / "live-gateway.log"
-# Program.Commands.cs logs every reply line it sends: `[gateway] <remote> => 0x0017 chat line "<text>": <hex>`.
-REPLY_LINE = re.compile(r'=> 0x0017 chat line "(.*)": [0-9A-F]+\s*$')
+# Program.Commands.cs logs every reply line it sends: `[gateway] <remote> => 0x0017 chat line "<text>": <hex>`. The
+# remote (127.0.0.1:<the client's local port>) tells the clients of one Gateway apart.
+REPLY_LINE = re.compile(r'(?:\[gateway\] \S+:(\d+) )?=> 0x0017 chat line "(.*)": [0-9A-F]+\s*$')
+
+
+def waypoint_packet(request):
+    """C→S 0x4d, the World panel pin's travel (Agents/docs/protocol/16-waypoints.md §3): u16 destination HASH16 (the
+    WorldAreas row's), u32 (the panel's waypoint object id; the Gateway only logs it), u8 Ctrl held. The Gateway
+    accepts it for an activated waypoint (`/waypoints all` activates every one) and changes area."""
+    value = request.get("area")
+    area = int(value, 0) if isinstance(value, str) else value
+    if isinstance(area, bool) or not isinstance(area, int) or not 0 < area <= 0xffff:
+        raise ValueError("area must be a WorldAreas HASH16 (1-0xffff)")
+    return list(struct.pack(">HHIB", 0x4d, area, 0x2f00, 0)), area
 
 
 def tp_text(request):
@@ -139,17 +302,20 @@ def log_mark(path=GATEWAY_LOG):
         return None
 
 
-def read_replies(path, start):
-    """The chat lines the Gateway sent after byte offset `start` of its log."""
+def read_replies(path, start, ports=None):
+    """The chat lines the Gateway sent after byte offset `start` of its log; with `ports`, only those sent to a
+    connection from one of these local ports (one client's, when several share the Gateway; none when the client has
+    no connection to the Gateway). `ports` None (the TCP table could not be read): every line."""
     with path.open("rb") as log:
         log.seek(start)
         data = log.read()
     end = data.rfind(b"\n") + 1  # a line still being written is read next time
     lines = data[:end].decode("utf-8", errors="replace").splitlines()
-    return [m.group(1) for m in map(REPLY_LINE.search, lines) if m], start + end
+    return [m.group(2) for m in map(REPLY_LINE.search, lines)
+            if m and (ports is None or (m.group(1) is not None and int(m.group(1)) in ports))], start + end
 
 
-def collect_replies(start, wait=1.5, quiet=0.25, path=GATEWAY_LOG):
+def collect_replies(start, wait=1.5, quiet=0.25, path=GATEWAY_LOG, ports=None):
     """The Gateway's reply lines to a command just sent: read until `quiet` seconds pass without a new line after
     the first one, or `wait` seconds in total. None when there is no log to read."""
     if start is None:
@@ -159,7 +325,7 @@ def collect_replies(start, wait=1.5, quiet=0.25, path=GATEWAY_LOG):
     last = None
     while True:
         try:
-            lines, offset = read_replies(path, offset)
+            lines, offset = read_replies(path, offset, ports)
         except OSError:
             return None
         if lines:
@@ -172,11 +338,12 @@ def collect_replies(start, wait=1.5, quiet=0.25, path=GATEWAY_LOG):
 
 
 class ClientControl:
-    def __init__(self):
+    def __init__(self, client_session=None):
         self.device = frida.get_local_device()
         self.session = self.script = None
         self.pid = None
         self.detached = False
+        self.client_session = session_name(os.environ.get("Game_CLIENT_SESSION") if client_session is None else client_session)
 
     def close(self):
         if self.session is not None:
@@ -194,11 +361,9 @@ class ClientControl:
         self.close()
 
     def _find_client(self):
-        # Name alone is insufficient: check the module path before any native command.
-        candidates = [p for p in self.device.enumerate_processes() if p.name.lower() == "game.patched.exe" and live_process(p.pid)]
-        if len(candidates) > 1:
-            raise RuntimeError("Multiple patched clients are running; keep only this checkout's client")
-        return candidates[0].pid if candidates else None
+        # Name alone is insufficient: other checkouts and sessions run clients too (find_client).
+        return find_client(self.client_session,
+                           [p.pid for p in self.device.enumerate_processes() if p.name.lower() == "game.patched.exe"])
 
     def attach(self):
         if self.script is not None and not self.detached:
@@ -206,7 +371,7 @@ class ClientControl:
         self.close()
         self.pid = self._find_client()
         if self.pid is None:
-            raise RuntimeError("Client is not running; use game:open after starting the local servers")
+            raise RuntimeError(f"Client (session {self.client_session}) is not running; use game:open after starting the local servers")
         self.session = self.device.attach(self.pid)
         self.detached = False
         self.session.on("detached", lambda *unused: setattr(self, "detached", True))
@@ -217,7 +382,10 @@ class ClientControl:
         self.script.load()
         try:
             identity = self.script.exports_sync.identity()
-            if Path(identity["path"]).resolve() != CLIENT.resolve():
+            # The patched client, started from this checkout's Client path (process_info: unresolved).
+            launched = process_info(self.pid)
+            if (identity.get("pid") != self.pid or Path(identity["path"]).resolve() != CLIENT.resolve()
+                    or launched is None or not same_path(launched[0], CLIENT)):
                 raise RuntimeError("Refusing a client outside this checkout's Client directory")
         except Exception:
             self.close()
@@ -260,16 +428,19 @@ class ClientControl:
     def open(self):
         if self._find_client() is not None:
             return {"alreadyRunning": True, **self.ready()}
-        # ClientOnly never restarts services or kills a process. All launches still go through live.ps1.
+        # ClientOnly never restarts services or kills a process. All launches still go through live.ps1. Its worst case:
+        # the gateway-list read and write (a GGPK open each), the Python/Frida check and up to 60 s for a session
+        # launcher (whose own wait for the client's run-mutex rename is 30 s); 240 s leaves room for a slow disk.
         env = dict(os.environ, HTTP_PROXY="http://127.0.0.1:1", HTTPS_PROXY="http://127.0.0.1:1",
                    ALL_PROXY="http://127.0.0.1:1", NO_PROXY="localhost,127.0.0.1,::1")
         env.pop("GGG_CONFIG_FILE_NAME", None)
-        log = ROOT / "logs" / "client-control-launch.log"
+        env["Game_CLIENT_SESSION"] = self.client_session
+        log = ROOT / "logs" / f"client-control-launch-{self.client_session}.log"
         log.parent.mkdir(exist_ok=True)
         with log.open("w", encoding="utf-8") as output:
             subprocess.run(["powershell.exe", "-NoProfile", "-File", str(ROOT / "scripts/dev/live.ps1"),
-                            "-ClientOnly"], cwd=ROOT, env=env, stdout=output, stderr=subprocess.STDOUT,
-                           check=True, timeout=30, creationflags=subprocess.CREATE_NO_WINDOW)
+                            "-ClientOnly", "-Session", self.client_session], cwd=ROOT, env=env, stdout=output,
+                           stderr=subprocess.STDOUT, check=True, timeout=240, creationflags=subprocess.CREATE_NO_WINDOW)
         return {"alreadyRunning":False,**self.ready()}
 
     def execute(self, request):
@@ -303,7 +474,7 @@ class ClientControl:
             if current.get("loginState") != 0 or current.get("screen") != "login":
                 self.rpc("logout")
                 self.wait(lambda s: s.get("screen") == "login" and s.get("loginState") == 0, "login screen")
-            port = int(os.environ.get("Game_LOGIN_PORT", "20493"))
+            port = stack_port("login")
             if not 1 <= port <= 65535:
                 raise ValueError("Invalid local login port")
             self.rpc("connect", port=port, account=account, digest=digest)
@@ -325,7 +496,7 @@ class ClientControl:
             if current.get("loginState") != 0 or current.get("screen") != "login":
                 self.rpc("logout")
                 self.wait(lambda s: s.get("screen") == "login" and s.get("loginState") == 0, "login screen")
-            self.rpc("connectSaved", port=int(os.environ.get("Game_LOGIN_PORT", "20493")))
+            self.rpc("connectSaved", port=stack_port("login"))
             result = self.wait(lambda s: s.get("loginState") == 3 or s.get("lastLoginResult") is not None, "login result")
             if result.get("loginState") != 3:
                 raise RuntimeError(f"Saved login rejected (result {result.get('lastLoginResult')})")
@@ -359,9 +530,11 @@ class ClientControl:
             packet = chat_packet(text)
             start = log_mark()
             result = {**self.rpc("chat", bytes=packet), "text": text}
-            # Slash commands answer with chat lines (S→C 0x17); plain chat has no reply to wait for.
+            # Slash commands answer with chat lines (S→C 0x17); plain chat has no reply to wait for. Only the lines
+            # sent to this client's connection: other sessions may play on the same Gateway.
             if text.startswith("/"):
-                result["replies"] = collect_replies(start, request.get("wait", 1.5))
+                ports = connection_ports(self.pid, stack_port("gateway"))
+                result["replies"] = collect_replies(start, request.get("wait", 1.5), ports=ports)
             return result
         if command == "object:interact":
             target = int(request["id"])
@@ -391,6 +564,13 @@ class ClientControl:
         if command == "inventory:place":
             inventory, x, y = int(request["inventoryId"]), int(request.get("x",0)), int(request.get("y",0))
             return self.rpc("interaction",bytes=list(struct.pack(">HIIIBBBB",0x2a,inventory,x,y,0,3,0,0)))
+        if command == "waypoint:travel":
+            packet, area = waypoint_packet(request)
+            return {**self.rpc("interaction", bytes=packet), "area": area}
+        if command == "game:frames":
+            # Main-loop frames since the bridge attached and the rate since the previous call (client-control.js).
+            self.attach()
+            return {"pid": self.pid, **self.script.exports_sync.frames()}
         if command == "flask:use":
             packet, slot = flask_packet(request)
             return {**self.rpc("interaction", bytes=packet), "slot": slot}
@@ -424,9 +604,10 @@ def main():
     parser.add_argument("text", nargs="?", help="slash command, chat text, or tp target")
     parser.add_argument("--password-stdin", action="store_true", help="read one password line from stdin")
     parser.add_argument("--stdio", action="store_true", help="persistent JSON-lines RPC on stdin/stdout")
+    parser.add_argument("--session", help="the client session (live.ps1 -Session; default Game_CLIENT_SESSION, else the default client)")
     options = parser.parse_args()
     os.chdir(ROOT)
-    with ClientControl() as control:
+    with ClientControl(options.session) as control:
         if options.stdio:
             for line in sys.stdin:
                 try:

@@ -14,7 +14,8 @@ using GameServer.Storage;
 // Port: Game_LOGIN_PORT (default 20493). Keys default to data/login-keys.json. Accounts: the save database
 // (Game_SAVES_DB, default data/saves.db, shared with GameServer.Host and the Gateway; register through the Host), with an
 // older data/accounts.json (Game_DEV_DB) imported once. Instance keys: data/instance-secret.bin (Game_INSTANCE_SECRET),
-// shared with GameServer.Gateway. Instance control for the Gateway: 127.0.0.1:Game_AUTH_CONTROL_PORT (20495).
+// shared with GameServer.Gateway. Instance control for the Gateway: 127.0.0.1:Game_AUTH_CONTROL_PORT (20495). Play sends
+// the client to the Gateway at Game_GATEWAY_HOST:Game_GATEWAY_PORT (127.0.0.1:6112, GatewayEndpoint).
 
 const string DefaultKeys = "data/login-keys.json";
 string cmd = args.Length > 0 ? args[0] : "serve";
@@ -147,7 +148,7 @@ static async Task HandleConnection(TcpClient tcp, LoginServerKeys keys, AccountS
             // Anything the client sent after its 0x0002 is already ciphertext.
             var incoming = new LoginMessageStream(LoginDirection.ClientToServer);
             InstanceDirectory.LoginLink? link = null;
-            var session = new LoginServerSession(accounts) { Keyring = keyring, Leagues = LeagueCatalog.FromEnvironment(), CharacterDeleted = SetSaveAside, Assign = s => directory.AssignStart(s, link!) };
+            var session = new LoginServerSession(accounts) { InstanceHost = GatewayEndpoint.Host, InstancePort = GatewayEndpoint.Port, Keyring = keyring, Leagues = LeagueCatalog.FromEnvironment(), CharacterDeleted = SetSaveAside, Assign = s => directory.AssignStart(s, link!) };
             link = new InstanceDirectory.LoginLink(stream, ciphers, session, peer);
             byte[] rest = buf[used..have];
             try

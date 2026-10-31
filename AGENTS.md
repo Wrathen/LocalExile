@@ -18,8 +18,9 @@ A feature that fits the [mod API](Agents/docs/dev/modding.md) can also be a mod 
 
 ## Rules
 
-- **Start the client only through `scripts/dev/live.ps1`, and only one at a time.** Any other launch contacts the
-  official patch servers and can update the client, which breaks the setup.
+- **Start the client only through `scripts/dev/live.ps1`, and only one at a time unless each has its own session**
+  (`-Session`; checkouts' servers side by side need `-PortBase`: [live testing](Agents/docs/dev/live-testing.md)).
+  Any other launch contacts the official patch servers and can update the client, which breaks the setup.
 - **Run commands from the repository root.**
 - **Keep production game-data paths relative to the repository root (`data/`).** Do not add parent-directory
   searching, an absolute `DataFolder`, or catalog-path changes to accommodate tests or one machine.

@@ -22,9 +22,12 @@ public static class GgpkMaintenance
         return HashBytes(ggpk.Root);
     }
 
+    /// <summary>A file's bytes, or null. Read-only and share-friendly like <see cref="RootHash"/>: a running client holds
+    /// the GGPK open for reading and lets only readers in (LibGGPK3's own open asks for write access and fails then).</summary>
     public static byte[]? TryReadFile(string ggpkPath, string path)
     {
-        using var ggpk = new GGPK(ggpkPath);
+        using var stream = new FileStream(ggpkPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var ggpk = new GGPK(stream, false);
         return ggpk.Root.TryFindNode(path, out var node) && node is FileRecord fr ? fr.Read() : null;
     }
 

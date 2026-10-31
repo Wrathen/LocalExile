@@ -69,7 +69,7 @@ if (args.Length > 0 && args[0].Equals("seed-game-data", StringComparison.Ordinal
     }
 }
 
-int port = int.TryParse(Environment.GetEnvironmentVariable("Game_GATEWAY_PORT"), out var p) ? p : 6112;
+int port = GatewayEndpoint.Port;
 var keyring = InstanceKeyring.LoadOrCreate(Environment.GetEnvironmentVariable("Game_INSTANCE_SECRET") ?? Path.Combine("data", "instance-secret.bin"));
 
 // The HNC side channel needs a 64-byte table from the client; read it from the local client instead of shipping it.

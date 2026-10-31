@@ -3,13 +3,21 @@ import contextlib
 import io
 from itertools import chain, repeat
 import json
+import os
 from pathlib import Path
+import shutil
+import struct
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, call, patch
 
 from client_control import (
-    ClientControl, chat_packet, collect_replies, flask_packet, log_mark, normalize, read_replies, run_request, tp_text,
+    ClientControl, chat_packet, collect_replies, connection_ports, find_client, flask_packet, launched_path, log_mark,
+    normalize, process_info, read_records, read_replies, run_request, same_path, session_name, stack_port, tp_text,
+    waypoint_packet,
 )
 
 
@@ -65,6 +73,45 @@ class ClientControlTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 flask_packet(bad)
 
+    def test_waypoint_travel_is_the_pin_message(self):
+        self.assertEqual(waypoint_packet({"area": 0x7ad2}), ([0x00, 0x4d, 0x7a, 0xd2, 0, 0, 0x2f, 0x00, 0], 0x7ad2))
+        self.assertEqual(waypoint_packet({"area": "0x235c"})[1], 0x235c)
+        for bad in [{}, {"area": 0}, {"area": 0x10000}, {"area": "x"}, {"area": True}, {"area": 1.5}]:
+            with self.assertRaises(ValueError):
+                waypoint_packet(bad)
+
+    def test_waypoint_travel_and_frames_go_through_the_bridge(self):
+        control = ClientControl.__new__(ClientControl)
+        control.rpc = Mock(return_value={"submitted": True})
+        self.assertEqual(control.execute({"command": "waypoint:travel", "area": "0x7ad2"}),
+                         {"submitted": True, "area": 0x7ad2})
+        control.rpc.assert_called_once_with("interaction", bytes=[0x00, 0x4d, 0x7a, 0xd2, 0, 0, 0x2f, 0x00, 0])
+        control.attach = Mock()
+        control.pid = 7
+        control.script = Mock()
+        control.script.exports_sync.frames.return_value = {"frames": 92, "seconds": 10.0, "fpsSinceLastCall": 9.2}
+        self.assertEqual(control.execute({"command": "game:frames"}),
+                         {"pid": 7, "frames": 92, "seconds": 10.0, "fpsSinceLastCall": 9.2})
+        control.attach.assert_called_once()
+
+    def test_open_outwaits_live_ps1s_session_start(self):
+        # live.ps1 -ClientOnly may take the gateway-list read and write, the Python check and up to 60 s for a session
+        # launcher: open() must not give up first.
+        control = ClientControl.__new__(ClientControl)
+        control.client_session = "s1"
+        control._find_client = Mock(return_value=None)
+        control.ready = Mock(return_value={"screen": "login"})
+        with tempfile.TemporaryDirectory() as folder, patch("client_control.ROOT", Path(folder)),                 patch("client_control.subprocess.run") as run:
+            control.open()
+        self.assertGreaterEqual(run.call_args.kwargs["timeout"], 180)
+        self.assertEqual(run.call_args.args[0][-3:], ["-ClientOnly", "-Session", "s1"])
+
+    def test_bridge_script_allows_the_travel_message_and_counts_frames(self):
+        source = Path(__file__).with_name("client-control.js").read_text(encoding="utf-8")
+        self.assertIn("0x4d:9", source)
+        self.assertIn("frameCount.frames++", source)
+        self.assertIn("rpc.exports.frames", source)
+
     def test_replies_are_the_gateway_chat_lines_after_the_mark(self):
         nl = chr(10)
         with tempfile.TemporaryDirectory() as folder:
@@ -82,6 +129,139 @@ class ClientControlTests(unittest.TestCase):
             self.assertEqual(collect_replies(start, wait=0.3, quiet=0.05, path=log), lines)
             self.assertIsNone(collect_replies(None))
             self.assertIsNone(log_mark(Path(folder) / "missing.log"))
+
+    def test_replies_of_one_client_when_several_share_the_gateway(self):
+        nl = chr(10)
+        with tempfile.TemporaryDirectory() as folder:
+            log = Path(folder) / "live-gateway.log"
+            log.write_text(
+                '21:04:59.471 [gateway] 127.0.0.1:50001 => 0x0017 chat line "mine": 0017' + nl +
+                '21:04:59.472 [gateway] 127.0.0.1:50002 => 0x0017 chat line "theirs": 0017' + nl +
+                '21:04:59.473 [gateway] 127.0.0.1:50003 => 0x0017 chat line "mine after an area change": 0017' + nl,
+                encoding="utf-8")
+            self.assertEqual(read_replies(log, 0, {50001, 50003})[0], ["mine", "mine after an area change"])
+            # The table could not be read: every reply, as with one client. The client has no connection to the
+            # Gateway (between areas): none of them, never another client's.
+            self.assertEqual(len(read_replies(log, 0, None)[0]), 3)
+            self.assertEqual(read_replies(log, 0, set())[0], [])
+            self.assertEqual(collect_replies(0, wait=0.2, quiet=0.05, path=log, ports={50002}), ["theirs"])
+
+
+class SeveralClientsTests(unittest.TestCase):
+    """Several stacks and clients on one PC: ports, sessions and which client is this checkout's."""
+
+    def test_session_names(self):
+        self.assertEqual(session_name(None), "default")
+        self.assertEqual(session_name(""), "default")
+        self.assertEqual(session_name("default"), "default")
+        self.assertEqual(session_name("a1"), "a1")
+        self.assertEqual(session_name("Agent_2-b"), "Agent_2-b")
+        for bad in ["-a", "a b", "../x", "a" * 25, "a\\b", "a.json"]:
+            with self.assertRaises(ValueError):
+                session_name(bad)
+
+    def test_ports_come_from_the_stack(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stack = Path(folder) / "stack.json"
+            # No setting: today's ports.
+            self.assertEqual(stack_port("login", {}, stack), 20493)
+            self.assertEqual(stack_port("gateway", {}, stack), 6112)
+            # live.ps1 -PortBase 21000 remembered the stack's ports (written by PowerShell: a BOM is tolerated).
+            stack.write_text("\ufeff" + json.dumps({"portBase": 21000, "ports": {"login": 21002, "gateway": 21004}}),
+                             encoding="utf-8")
+            self.assertEqual(stack_port("login", {}, stack), 21002)
+            self.assertEqual(stack_port("gateway", {}, stack), 21004)
+            # live.ps1 wrote the ports its servers got: they win over a shell's leftover variables.
+            self.assertEqual(stack_port("login", {"Game_LOGIN_PORT": "30000", "Game_PORT_BASE": "23000"}, stack), 21002)
+            # On the default ports (no file) the server's own variable applies, as for live.ps1.
+            stack.unlink()
+            self.assertEqual(stack_port("login", {"Game_LOGIN_PORT": "30000"}, stack), 30000)
+            stack.write_text("{broken", encoding="utf-8")
+            self.assertEqual(stack_port("gateway", {}, stack), 6112)
+
+    def test_client_records(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            (folder / "a1.json").write_text("\ufeff" + json.dumps({"pid": 7, "started": 123, "session": "a1"}), encoding="utf-8")
+            (folder / "broken.json").write_text("{", encoding="utf-8")
+            (folder / "nopid.json").write_text("{}", encoding="utf-8")
+            self.assertEqual(read_records(folder), {"a1": {"pid": 7, "started": 123}})
+            self.assertEqual(read_records(folder / "missing"), {})
+
+    def test_only_this_checkouts_client_of_the_session(self):
+        mine, other = r"D:\x\pr-a\Client\Game.patched.exe", r"D:\x\pr-b\Client\Game.patched.exe"
+        second = 10_000_000
+        processes = {1: (other, 5 * second), 2: (mine, 10 * second), 3: (mine, 20 * second), 4: (mine, 30 * second)}
+        info = processes.get
+        find = lambda session, records, pids=processes: find_client(session, list(pids), info, records, mine)
+        records = {"a1": {"pid": 3, "started": 20 * second + 5}, "a2": {"pid": 4, "started": 30 * second}}
+        self.assertEqual(find("a1", records), 3)
+        self.assertEqual(find("a2", records), 4)
+        # The default session: the client no named session recorded, never another checkout's (pid 1).
+        self.assertEqual(find("default", records), 2)
+        self.assertEqual(find("default", {**records, "default": {"pid": 2, "started": 10 * second}}), 2)
+        # A named session without a record has no client; a record whose PID now belongs to a later process neither.
+        self.assertIsNone(find("b1", records))
+        self.assertIsNone(find("a1", {"a1": {"pid": 3, "started": 99 * second}}, {1: None, 3: None}))
+        # A recorded client that has exited (process_info gives None).
+        self.assertIsNone(find("a2", records, {1: None, 2: None, 3: None}))
+        # Two unrecorded clients of this checkout: ambiguous for the default session.
+        with self.assertRaisesRegex(RuntimeError, "--session"):
+            find("default", {})
+        # Only another checkout's client runs: none of ours.
+        self.assertIsNone(find("default", {}, {1: None}))
+        # A launch under way (pid 0 until live.ps1 knows it): a client started after it is not the default session's.
+        launching = {"a3": {"pid": 0, "started": 25 * second}}
+        self.assertEqual(find_client("default", [2, 4], info, launching, mine, now=26 * second), 2)
+        self.assertIsNone(find_client("default", [4], info, launching, mine, now=26 * second))
+        # A pending record left behind for over a minute no longer hides anything.
+        self.assertEqual(find_client("default", [4], info, launching, mine, now=99 * second), 4)
+
+    def test_launched_path(self):
+        self.assertEqual(launched_path(r'"D:\x y\Client\Game.patched.exe" --patching-server 127.0.0.1:21000'),
+                         r"D:\x y\Client\Game.patched.exe")
+        self.assertEqual(launched_path(r"D:\x\Client\Game.patched.exe --nologo"), r"D:\x\Client\Game.patched.exe")
+        self.assertEqual(launched_path(""), "")
+
+    @unittest.skipUnless(os.name == "nt", "Windows junctions")
+    def test_a_client_started_through_a_junction_is_known_by_that_path(self):
+        """Each checkout's Client is a junction to one shared folder: only the path a process was started by tells
+        checkouts apart (Windows' image name resolves the junction). A real process started through a real junction."""
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "shared"
+            target.mkdir()
+            exe = target / "Game.patched.exe"
+            shutil.copyfile(os.path.join(os.environ["SystemRoot"], "System32", "PING.EXE"), exe)
+            junction = Path(folder) / "checkout-a"
+            subprocess.run(["cmd", "/c", "mklink", "/J", str(junction), str(target)], check=True, capture_output=True)
+            launched = junction / "Game.patched.exe"
+            child = subprocess.Popen([str(launched), "-n", "30", "127.0.0.1"], stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
+            try:
+                time.sleep(0.3)
+                details = process_info(child.pid)
+                self.assertIsNotNone(details)
+                self.assertTrue(same_path(details[0], launched), details[0])
+                self.assertEqual(find_client("default", [child.pid], records={}, client=launched), child.pid)
+                # The same file through another checkout's path (here: the junction's target) is not this one's.
+                self.assertIsNone(find_client("default", [child.pid], records={}, client=exe))
+                record = {"a1": {"pid": child.pid, "started": details[1]}}
+                self.assertEqual(find_client("a1", [child.pid], records=record, client=launched), child.pid)
+                self.assertIsNone(find_client("a1", [child.pid], records=record, client=exe))
+            finally:
+                child.kill()
+                child.wait()
+                subprocess.run(["cmd", "/c", "rmdir", str(junction)], check=True, capture_output=True)
+
+    def test_connection_ports_of_the_client(self):
+        def row(state, local, remote, pid):
+            swap = lambda port: ((port & 0xff) << 8) | (port >> 8)
+            return struct.pack("<6I", state, 0x0100007f, swap(local), 0x0100007f, swap(remote), pid)
+        table = struct.pack("<I", 4) + row(5, 50001, 21004, 42) + row(5, 50002, 21004, 43) + \
+            row(5, 50003, 20493, 42) + row(11, 50004, 21004, 42)
+        self.assertEqual(connection_ports(42, 21004, table), {50001})  # established, to the Gateway, of pid 42
+        self.assertEqual(connection_ports(43, 21004, table), {50002})
+        self.assertEqual(connection_ports(44, 21004, table), set())
 
 
 class ClientControlLoginTests(unittest.TestCase):

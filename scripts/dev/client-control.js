@@ -191,7 +191,7 @@ function execute(request) {
     case 'interaction': {
       if (current.screen !== 'game' || current.instanceState !== 3) throw new Error('Interaction requires an active area');
       const b=request.bytes, id=Array.isArray(b) && b.length>=2 ? b[0]*256+b[1] : -1;
-      const lengths={0x24:12,0x25:16,0x28:13,0x2a:18,0x70:6,0x82:3,0x85:2,0x88:15};
+      const lengths={0x24:12,0x25:16,0x28:13,0x2a:18,0x4d:9,0x70:6,0x82:3,0x85:2,0x88:15};
       if (!lengths[id] || b.length!==lengths[id])
         throw new Error('Unsupported interaction message');
       sendPacket(b,'instance'); return {submitted:true};
@@ -200,7 +200,11 @@ function execute(request) {
   }
 }
 let pending = null;
+// Main-loop frames since this script attached (the frame point runs once per frame on the main thread), for
+// game:frames: the client's frame rate, e.g. the cheap preset's 10-fps cap (Agents/docs/dev/headless-client.md).
+const frameCount = {frames: 0, since: Date.now(), last: {time: Date.now(), frames: 0}};
 Interceptor.attach(addresses.frame, function () {
+  frameCount.frames++;
   if (!pending) return;
   const work = pending; pending = null; clearTimeout(work.timer);
   // Do not let a one-shot caller detach while this native hook is still unwinding.
@@ -222,6 +226,12 @@ Interceptor.attach(addresses.loginWriter, {onEnter(args) {
   args[0].add(0x95).writeU8(0);
   value.digest.fill(0); loginSubmitted = true;
 }});
+rpc.exports.frames = () => {
+  const now = Date.now(), {frames, last} = frameCount;
+  const fps = (frames - last.frames) * 1000 / Math.max(1, now - last.time);
+  frameCount.last = {time: now, frames};
+  return {frames, seconds: Math.round((now - frameCount.since) / 100) / 10, fpsSinceLastCall: Math.round(fps * 10) / 10};
+};
 rpc.exports.command = request => new Promise((resolve, reject) => {
   if (pending) { reject(new Error('Another command is pending')); return; }
   pending = {request, resolve, reject, timer: setTimeout(() => {
